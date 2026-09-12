@@ -1,0 +1,91 @@
+package io.github.p1neapplexpress.openflux.ui
+
+import android.content.Intent
+import android.os.Bundle
+import android.view.View
+import android.widget.Toast
+import androidx.activity.viewModels
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toDrawable
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
+import androidx.lifecycle.lifecycleScope
+import io.github.p1neapplexpress.openflux.R
+import io.github.p1neapplexpress.openflux.event.EventBus
+import io.github.p1neapplexpress.openflux.util.ThemePreferences
+import io.github.p1neapplexpress.openflux.util.TunnelLinkParser
+import kotlinx.coroutines.launch
+
+class MainActivity : AppCompatActivity() {
+
+    private val vm: TunnelsViewModel by viewModels()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        ThemePreferences(this).applyTheme()
+        super.onCreate(savedInstanceState)
+
+        val rootView = findViewById<View>(android.R.id.content)
+        ViewCompat.setOnApplyWindowInsetsListener(rootView) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.updatePadding(top = bars.top, bottom = bars.bottom)
+            WindowInsetsCompat.CONSUMED
+        }
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        supportActionBar?.hide()
+
+        val themePrefs = ThemePreferences(this)
+        val isNight = when (themePrefs.themeMode) {
+            ThemePreferences.THEME_LIGHT -> false
+            ThemePreferences.THEME_DARK -> true
+            else -> (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        }
+        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+        insetsController.isAppearanceLightStatusBars = !isNight
+        insetsController.isAppearanceLightNavigationBars = !isNight
+
+        setContentView(R.layout.activity_main)
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.main, MainFragment(), "")
+            .commit()
+
+        lifecycleScope.launch {
+            EventBus.events.collect { ev ->
+                supportFragmentManager.fragments.forEach { f ->
+                    if (f is BaseFragment) f.onNewEvent(ev)
+                }
+            }
+        }
+
+        handleDeepLink(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleDeepLink(intent)
+    }
+
+    private fun handleDeepLink(intent: Intent) {
+        val uri = intent.data ?: return
+        if (!uri.scheme.equals("openflux", ignoreCase = true)) return
+        val tunnel = TunnelLinkParser.fromUri(uri) ?: return
+
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.import_confirm_title)
+            .setMessage(getString(R.string.import_confirm_message, tunnel.name))
+            .setPositiveButton(R.string.btn_add_and_connect) { _, _ ->
+                vm.addTunnel(tunnel)
+                vm.startTunnel(tunnel)
+                Toast.makeText(this, R.string.config_saved, Toast.LENGTH_SHORT).show()
+            }
+            .setNeutralButton(R.string.btn_add_only) { _, _ ->
+                vm.addTunnel(tunnel)
+                Toast.makeText(this, R.string.config_saved, Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+}

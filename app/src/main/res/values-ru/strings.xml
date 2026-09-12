@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">Fluxon</string>
+
+    <string name="channel_name">VPN-сервис</string>
+    <string name="notify_title">Fluxon работает</string>
+    <string name="notify_msg">Туннель активен</string>
+
+    <string name="prof_default">По умолчанию</string>
+
+    <string name="yandex_docs_backend">Бэкенд Yandex.Docs</string>
+    <string name="vyandex_backend">Бэкенд Yandex.Docs (Volga)</string>
+    <string name="max_messenger_backend">Бэкенд MAX Messenger</string>
+
+    <string name="starting_transport">Запуск транспорта…</string>
+    <string name="starting_tsocks">Запуск tun2socks…</string>
+    <string name="connecting">Подключение…</string>
+    <string name="running">Работает</string>
+    <string name="stopped">Остановлено</string>
+
+    <string name="vpn_permission_required">Предоставьте разрешение VPN для установки подключения</string>
+    <string name="qr_scan_failed">Не удалось отсканировать QR-код</string>
+    <string name="name_required">Введите имя туннеля</string>
+
+    <string name="add_tunnel">Добавить туннель</string>
+    <string name="scan_qr">Сканировать QR</string>
+    <string name="enter_manually">Ввести вручную</string>
+    <string name="save">Сохранить</string>
+    <string name="clear">Очистить</string>
+    <string name="auto_scroll">Автопрокрутка</string>
+
+    <string name="select_transport">Транспорт</string>
+    <string name="debug_mode">Режим отладки</string>
+    <string name="tunnel_name">Имя туннеля</string>
+    <string name="document_url">URL документа</string>
+    <string name="max_token">MAX токен</string>
+    <string name="max_uid">MAX user ID</string>
+    <string name="on">Вкл</string>
+    <string name="off">Выкл</string>
+    <string name="tap_to_connect">Нажмите для подключения</string>
+
+    <string name="switch_tunnel">Ввести вручную</string>
+    <string name="add_tunnel_short">Добавить</string>
+    <string name="no_tunnel">Нет туннеля</string>
+    <string name="uptime_label">Время подключения</string>
+
+    <string name="select_config">Конфигурация</string>
+    <string name="no_configs">Нет конфигураций</string>
+    <string name="action_edit">Изменить</string>
+    <string name="action_delete">Удалить</string>
+    <string name="delete_config_title">Удалить конфигурацию?</string>
+    <string name="delete_config_msg">Конфигурация будет удалена безвозвратно.</string>
+    <string name="cancel">Отмена</string>
+    <string name="edit_config">Редактирование конфигурации</string>
+    <string name="cannot_delete_active">Сначала остановите VPN</string>
+    <string name="config_saved">Сохранено</string>
+    <string name="config_deleted">Удалено</string>
+
+    <!-- Ошибки состояния -->
+    <string name="err_service_not_connected">Сервис не подключён</string>
+    <string name="err_vpn_iface_not_ready">VPN-интерфейс не готов</string>
+    <string name="err_transport_not_started">Сбой запуска транспорта</string>
+    <string name="err_tun2socks_not_started">Сбой запуска tun2socks</string>
+    <string name="err_transport_binary_missing">Не найден исполняемый файл транспорта</string>
+    <string name="err_invalid_fd">Некорректный файловый дескриптор TUN</string>
+    <string name="err_pdnsd_missing">Не найден исполняемый файл pdnsd</string>
+    <string name="err_tun2socks_missing">Не найден исполняемый файл tun2socks</string>
+    <string name="err_sendfd_failed">Не удалось передать файловый дескриптор TUN</string>
+    <string name="encryption_key_hint">Ключ шифрования (от 16 символов, необязательно)</string>
+    <string name="err_encryption_key_short">Ключ шифрования должен содержать не менее 16 символов</string>
+
+    <string name="notify_action_stop">Отключить</string>
+    <string name="notify_msg_idle">Не подключено</string>
+    <string name="notify_msg_connecting">Подключение…</string>
+    <string name="notify_msg_starting_transport">Запуск транспорта…</string>
+    <string name="notify_msg_starting_tun2socks">Запуск tun2socks…</string>
+    <string name="notify_msg_running">Туннель активен</string>
+    <string name="notify_msg_error">Ошибка</string>
+    <string name="notify_channel_desc">Статус VPN-сервиса</string>
+
+    <!-- Раздельное туннелирование -->
+    <string name="split_tunneling_title">Раздельное туннелирование</string>
+    <string name="split_tunnel_enable">Раздельное туннелирование</string>
+    <string name="split_tunnel_desc">Выборочная маршрутизация приложений</string>
+    <string name="tab_bypass">Обход</string>
+    <string name="tab_proxy">Проксировать</string>
+    <string name="tab_bypass_desc">Отмеченные приложения работают напрямую (в обход VPN). Все остальные направляются через туннель.</string>
+    <string name="tab_proxy_desc">Только отмеченные приложения работают через VPN. Все остальные приложения работают напрямую.</string>
+    <string name="search_apps_hint">Поиск приложений…</string>
+    <string name="reset_defaults">По умолчанию</string>
+    <string name="select_all">Выбрать все</string>
+    <string name="deselect_all">Снять выбор</string>
+    <string name="selected_apps_count">Выбрано: %1$d из %2$d</string>
+    <string name="no_apps_found">Приложения не найдены</string>
+
+    <!-- Экспорт через QR-код -->
+    <string name="action_share_qr">Поделиться QR-кодом</string>
+    <string name="qr_dialog_title">QR-код конфигурации</string>
+    <string name="qr_subtitle">Отсканируйте камерой в приложении Fluxon</string>
+    <string name="btn_copy_json">Скопировать</string>
+    <string name="btn_share">Поделиться</string>
+    <string name="btn_close">Закрыть</string>
+    <string name="copied_to_clipboard">Скопировано в буфер обмена</string>
+
+    <!-- Темы оформления -->
+    <string name="theme_toggle">Тема оформления</string>
+
+    <!-- Журнал событий -->
+    <string name="logs_title">Журнал событий</string>
+    <string name="logs_copied">Журнал скопирован в буфер обмена</string>
+    <string name="copy">Скопировать</string>
+
+    <!-- Выбор источника QR-кода -->
+    <string name="add_config_title">Добавить конфигурацию</string>
+    <string name="add_config_subtitle">Импортируйте настройки с помощью QR-кода</string>
+    <string name="scan_with_camera">Сканировать камерой</string>
+    <string name="scan_with_camera_desc">Наведите камеру на QR-код</string>
+    <string name="pick_from_gallery">Выбрать из галереи</string>
+    <string name="pick_from_gallery_desc">Загрузить фото или скриншот QR-кода</string>
+
+    <!-- Ключ шифрования -->
+    <string name="encryption_key">Ключ шифрования</string>
+    <string name="encryption_key_helper">от 16 символов, необязательно</string>
+
+    <!-- Импорт по ссылке и диплинки -->
+    <string name="import_from_link">Импорт по ссылке</string>
+    <string name="import_from_link_desc">Вставьте ссылку openflux:// или JSON</string>
+    <string name="import_link_dialog_title">Импорт конфигурации</string>
+    <string name="import_link_dialog_hint">openflux://... или JSON</string>
+    <string name="import_link_dialog_btn">Импортировать</string>
+    <string name="import_link_invalid">Неверный формат ссылки или конфигурации</string>
+    <string name="config_link_copied">Ссылка на конфигурацию скопирована</string>
+    <string name="import_confirm_title">Импорт конфигурации</string>
+    <string name="import_confirm_message">Добавить конфигурацию «%s»?</string>
+    <string name="btn_add_and_connect">Добавить и подключить</string>
+    <string name="btn_add_only">Только добавить</string>
+</resources>

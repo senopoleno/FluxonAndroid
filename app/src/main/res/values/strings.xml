@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Fluxon</string>
+    <string name="version" translatable="false">0.0.1</string>
+
+    <string name="channel_name">VPN Service</string>
+    <string name="notify_title">Fluxon is running</string>
+    <string name="notify_msg">Tunnel is active</string>
+
+    <string name="prof_default">Default</string>
+
+    <string name="yandex_docs_backend">Yandex.Docs backend</string>
+    <string name="vyandex_backend">Yandex.Docs backend (Volga)</string>
+    <string name="max_messenger_backend">MAX Messenger backend</string>
+
+    <string name="starting_transport">Starting transport…</string>
+    <string name="starting_tsocks">Starting tun2socks…</string>
+    <string name="connecting">Connecting…</string>
+    <string name="running">Running</string>
+    <string name="stopped">Stopped</string>
+
+    <string name="vpn_permission_required">Please grant VPN permission to establish connection</string>
+    <string name="qr_scan_failed">Failed to scan QR code</string>
+    <string name="name_required">Enter a tunnel name</string>
+
+    <string name="add_tunnel">Add tunnel</string>
+    <string name="scan_qr">Scan QR</string>
+    <string name="enter_manually">Enter manually</string>
+    <string name="save">Save</string>
+    <string name="clear">Clear</string>
+    <string name="auto_scroll">Auto-scroll</string>
+
+    <string name="select_transport">Transport</string>
+    <string name="debug_mode">Debug mode</string>
+    <string name="tunnel_name">Tunnel name</string>
+    <string name="document_url">Document URL</string>
+    <string name="max_token">MAX token</string>
+    <string name="max_uid">MAX user ID</string>
+    <string name="on">On</string>
+    <string name="off">Off</string>
+    <string name="tap_to_connect">Tap to connect</string>
+    <string name="switch_tunnel">Enter manually</string>
+    <string name="add_tunnel_short">Add</string>
+    <string name="no_tunnel">No tunnel</string>
+    <string name="uptime_label">Connected for</string>
+    <string name="select_config">Configuration</string>
+    <string name="no_configs">No configurations</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_delete">Delete</string>
+    <string name="delete_config_title">Delete configuration?</string>
+    <string name="delete_config_msg">This configuration will be permanently removed.</string>
+    <string name="cancel">Cancel</string>
+    <string name="edit_config">Edit configuration</string>
+    <string name="cannot_delete_active">Stop the VPN before deleting</string>
+    <string name="config_saved">Saved</string>
+    <string name="config_deleted">Deleted</string>
+    <string name="notify_action_stop">Disconnect</string>
+    <string name="notify_msg_idle">Not connected</string>
+    <string name="notify_msg_connecting">Connecting…</string>
+    <string name="notify_msg_starting_transport">Starting transport…</string>
+    <string name="notify_msg_starting_tun2socks">Starting tun2socks…</string>
+    <string name="notify_msg_running">Tunnel is active</string>
+    <string name="notify_msg_error">Error</string>
+    <string name="notify_channel_desc">VPN service status</string>
+    <string name="err_service_not_connected">Service not connected</string>
+    <string name="err_vpn_iface_not_ready">VPN interface is not ready</string>
+    <string name="err_transport_not_started">Transport failed to start</string>
+    <string name="err_tun2socks_not_started">tun2socks failed to start</string>
+    <string name="err_transport_binary_missing">Transport binary not found</string>
+    <string name="err_invalid_fd">Invalid TUN file descriptor</string>
+    <string name="err_pdnsd_missing">pdnsd binary not found</string>
+    <string name="err_tun2socks_missing">tun2socks binary not found</string>
+    <string name="err_sendfd_failed">Failed to pass TUN file descriptor</string>
+    <string name="encryption_key_hint">Encryption key (min 16 chars, optional)</string>
+    <string name="err_encryption_key_short">Encryption key must be at least 16 characters</string>
+
+    <!-- Split Tunneling -->
+    <string name="split_tunneling_title">Split Tunneling</string>
+    <string name="split_tunnel_enable">Split tunneling</string>
+    <string name="split_tunnel_desc">Direct selected traffic through or around VPN</string>
+    <string name="tab_bypass">Bypass</string>
+    <string name="tab_proxy">Proxy</string>
+    <string name="tab_bypass_desc">Selected apps connect directly without VPN. All other apps go through the tunnel.</string>
+    <string name="tab_proxy_desc">Only selected apps connect through VPN. All other apps connect directly.</string>
+    <string name="search_apps_hint">Search apps…</string>
+    <string name="reset_defaults">Reset</string>
+    <string name="select_all">Select all</string>
+    <string name="deselect_all">Clear all</string>
+    <string name="selected_apps_count">Selected: %1$d of %2$d</string>
+    <string name="no_apps_found">No apps found</string>
+
+    <!-- QR Code Sharing -->
+    <string name="action_share_qr">Share QR code</string>
+    <string name="qr_dialog_title">Configuration QR Code</string>
+    <string name="qr_subtitle">Scan with Fluxon app</string>
+    <string name="btn_copy_json">Copy</string>
+    <string name="btn_share">Share</string>
+    <string name="btn_close">Close</string>
+    <string name="copied_to_clipboard">Copied to clipboard</string>
+
+    <!-- Themes -->
+    <string name="theme_toggle">Theme</string>
+
+    <!-- Logs -->
+    <string name="logs_title">Event Log</string>
+    <string name="logs_copied">Logs copied to clipboard</string>
+    <string name="copy">Copy</string>
+
+    <!-- QR Source Options -->
+    <string name="add_config_title">Add Configuration</string>
+    <string name="add_config_subtitle">Import settings using QR code</string>
+    <string name="scan_with_camera">Scan with Camera</string>
+    <string name="scan_with_camera_desc">Point camera at QR code</string>
+    <string name="pick_from_gallery">Choose from Gallery</string>
+    <string name="pick_from_gallery_desc">Upload photo or screenshot of QR code</string>
+
+    <!-- Encryption Key -->
+    <string name="encryption_key">Encryption key</string>
+    <string name="encryption_key_helper">min. 16 characters, optional</string>
+
+    <!-- Link Import and Deep Links -->
+    <string name="import_from_link">Import via link</string>
+    <string name="import_from_link_desc">Paste openflux:// link or JSON</string>
+    <string name="import_link_dialog_title">Import Configuration</string>
+    <string name="import_link_dialog_hint">openflux://... or JSON</string>
+    <string name="import_link_dialog_btn">Import</string>
+    <string name="import_link_invalid">Invalid link or configuration format</string>
+    <string name="config_link_copied">Configuration link copied</string>
+    <string name="import_confirm_title">Import Configuration</string>
+    <string name="import_confirm_message">Add configuration \"%s\"?</string>
+    <string name="btn_add_and_connect">Add &amp; Connect</string>
+    <string name="btn_add_only">Add only</string>
+</resources>
