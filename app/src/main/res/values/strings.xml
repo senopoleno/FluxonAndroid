@@ -383,4 +383,5 @@
     <string name="action_check_ping">Check Ping</string>
     <string name="notify_ping_format">Ping: %1$d ms</string>
     <string name="notify_ping_testing">Checking ping…</string>
+    <string name="notify_ping_timeout">Ping: timeout</string>
 </resources>

@@ -385,6 +385,7 @@
     <string name="action_check_ping">Проверить пинг</string>
     <string name="notify_ping_format">Пинг: %1$d мс</string>
     <string name="notify_ping_testing">Проверка пинга…</string>
+    <string name="notify_ping_timeout">Пинг: таймаут</string>
     <!-- Обновления приложения -->
     <string name="update_checking">Проверка обновлений...</string>
     <string name="update_latest_installed">У вас установлена последняя версия (%1$s)</string>

@@ -18,6 +18,7 @@ import io.github.p1neapplexpress.openflux.event.AppEvent
 import io.github.p1neapplexpress.openflux.event.EventBus
 import io.github.p1neapplexpress.openflux.NativeBridge
 import io.github.p1neapplexpress.openflux.util.Constants
+import io.github.p1neapplexpress.openflux.util.LocalSocksSession
 import io.github.p1neapplexpress.openflux.util.Logx
 
 @SuppressLint("VpnServicePolicy")
@@ -190,7 +191,7 @@ class SocksVpnService : android.net.VpnService() {
                 notifications.updatePing(-2L)
                 Toast.makeText(
                     applicationContext,
-                    "Пинг: таймаут",
+                    getString(R.string.notify_ping_timeout),
                     Toast.LENGTH_SHORT
                 ).show()
             }
@@ -204,6 +205,7 @@ class SocksVpnService : android.net.VpnService() {
         runCatching { tun2socks.stop() }
         runCatching { supervisor.stop() }
         runCatching { vpn.stop() }
+        runCatching { LocalSocksSession.clearAuthenticator() }
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }

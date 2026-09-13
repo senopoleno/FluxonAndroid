@@ -12,10 +12,10 @@
     </style>
 
     <style name="Widget.Fluxon.Switch" parent="Widget.Material3.CompoundButton.MaterialSwitch">
-        <item name="android:thumb">@drawable/fluxon_switch_thumb</item>
         <item name="thumbTint">@color/switch_thumb_selector</item>
         <item name="trackTint">@color/switch_track_selector</item>
         <item name="trackDecorationTint">@android:color/transparent</item>
         <item name="thumbIconTint">@android:color/transparent</item>
+        <item name="thumbIconSize">0dp</item>
     </style>
 </resources>

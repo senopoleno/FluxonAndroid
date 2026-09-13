@@ -60,7 +60,11 @@ class NativeProcessSupervisor(private val context: Context) {
                 }
                 addAll(cleanPayload)
             }
-            Logx.i(TAG, "exec: ${cmd.joinToString(" ")}")
+            val logCmd = cmd.toMutableList()
+            val passIdx = logCmd.indexOf("--socks5-pass").takeIf { it >= 0 }
+                ?: logCmd.indexOf("--password").takeIf { it >= 0 }
+            if (passIdx != null && passIdx + 1 < logCmd.size) logCmd[passIdx + 1] = "***"
+            Logx.i(TAG, "exec: ${logCmd.joinToString(" ")}")
 
             val pb = ProcessBuilder(cmd)
                 .directory(context.filesDir)

@@ -14,7 +14,8 @@ import android.view.Window
 import android.widget.TextView
 import io.github.p1neapplexpress.openflux.BuildConfig
 import io.github.p1neapplexpress.openflux.R
-import kotlinx.coroutines.CoroutineScope
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -74,7 +75,7 @@ object AppUpdateChecker {
             }
         }
 
-        CoroutineScope(Dispatchers.IO).launch {
+        (activity as LifecycleOwner).lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val url = URL(GITHUB_API_URL)
                 val conn = (url.openConnection() as HttpURLConnection).apply {
@@ -87,6 +88,7 @@ object AppUpdateChecker {
 
                 if (conn.responseCode != 200) {
                     Logx.d(TAG, "GitHub releases API returned HTTP ${conn.responseCode}")
+                    conn.disconnect()
                     withContext(Dispatchers.Main) {
                         onResult?.invoke(false, "HTTP ${conn.responseCode}")
                     }
@@ -94,6 +96,7 @@ object AppUpdateChecker {
                 }
 
                 val responseBody = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
+                conn.disconnect()
                 val release = json.decodeFromString<GitHubRelease>(responseBody)
 
                 prefs.edit().putLong(KEY_LAST_CHECK_MS, now).apply()
@@ -109,7 +112,11 @@ object AppUpdateChecker {
                     withContext(Dispatchers.Main) {
                         onResult?.invoke(true, remoteTag)
                         if (!activity.isFinishing && !activity.isDestroyed) {
-                            showUpdateDialog(activity, release, downloadUrl)
+                            try {
+                                showUpdateDialog(activity, release, downloadUrl)
+                            } catch (e: Exception) {
+                                Logx.d(TAG, "Could not show update dialog: ${e.message}")
+                            }
                         }
                     }
                 } else {

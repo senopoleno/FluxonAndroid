@@ -72,6 +72,10 @@ object LocalSocksSession {
         })
     }
 
+    fun clearAuthenticator() {
+        Authenticator.setDefault(null)
+    }
+
     fun getLocalIpAddress(): String {
         try {
             val interfaces = NetworkInterface.getNetworkInterfaces() ?: return "127.0.0.1"
