@@ -155,7 +155,7 @@
     <string name="debug_check_update_title">Проверить обновление сейчас</string>
     <string name="debug_check_update_desc">Принудительный запрос к GitHub API без ожидания 24ч</string>
     <string name="debug_test_update_title">Тест уведомления об обновлении</string>
-    <string name="debug_test_update_desc">Открыть диалог новой версии v1.0.1 с описанием</string>
+    <string name="debug_test_update_desc">Открыть диалог новой версии v1.1.0 с описанием</string>
     <string name="debug_reset_timer_title">Сбросить таймер проверки (24ч)</string>
     <string name="debug_reset_timer_desc">Очистить время последней проверки в настройках</string>
     <string name="debug_generate_logs_title">Сгенерировать тестовые логи</string>

@@ -129,8 +129,8 @@ object AppUpdateChecker {
 
     fun showTestUpdateDialog(activity: Activity) {
         val testRelease = GitHubRelease(
-            tag_name = "v1.0.1",
-            name = "Fluxon v1.0.1 (Тестовый релиз)",
+            tag_name = "v1.1.0",
+            name = "Fluxon v1.1.0 (Тестовый релиз)",
             html_url = "https://github.com/senopoleno/FluxonAndroid/releases",
             body = "1. **Тестирование системы обновлений**:\n   - Уведомление в приложении работает корректно!\n2. **Улучшения интерфейса**:\n   - Проверка всех функций приложения.\n   - Быстрый отклик и стабильность.",
             assets = listOf(

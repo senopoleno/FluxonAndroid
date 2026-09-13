@@ -47,7 +47,7 @@
         android:textColor="@color/accent_blue"
         android:textSize="13sp"
         android:fontFamily="sans-serif-medium"
-        tools:text="Версия v1.0.1 • Текущая v1.0.0" />
+        tools:text="Версия v1.1.0 • Текущая v1.0.1" />
 
     <!-- Changelog / Release notes -->
     <ScrollView

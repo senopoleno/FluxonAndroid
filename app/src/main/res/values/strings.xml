@@ -153,7 +153,7 @@
     <string name="debug_check_update_title">Check for updates now</string>
     <string name="debug_check_update_desc">Force GitHub API check without waiting 24h</string>
     <string name="debug_test_update_title">Test update notification</string>
-    <string name="debug_test_update_desc">Open new version v1.0.1 dialog with changelog</string>
+    <string name="debug_test_update_desc">Open new version v1.1.0 dialog with changelog</string>
     <string name="debug_reset_timer_title">Reset check timer (24h)</string>
     <string name="debug_reset_timer_desc">Clear last update check timestamp in preferences</string>
     <string name="debug_generate_logs_title">Generate test logs</string>
