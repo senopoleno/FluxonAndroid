@@ -45,7 +45,7 @@
     <string name="no_tunnel">Нет туннеля</string>
     <string name="uptime_label">Время подключения</string>
 
-    <string name="select_config">Конфигурация</string>
+    <string name="select_config">Конфигурации</string>
     <string name="no_configs">Нет конфигураций</string>
     <string name="action_edit">Изменить</string>
     <string name="action_delete">Удалить</string>
@@ -141,4 +141,30 @@
     <string name="err_invalid_yandex_url">URL должен быть ссылкой Яндекс Диска или Документов</string>
     <string name="err_max_token_required">Введите токен MAX</string>
     <string name="err_max_uid_required">User ID MAX должен быть положительным числом</string>
+
+    <!-- Обновление приложения -->
+    <string name="update_available_title">Доступно обновление</string>
+    <string name="update_version_format">Версия %1$s • Текущая %2$s</string>
+    <string name="action_update_download">Скачать обновление</string>
+    <string name="action_update_later">Напомнить позже</string>
+    <string name="update_no_changelog">Доступна новая версия приложения Fluxon.</string>
+
+    <!-- Debug меню -->
+    <string name="debug_menu_title">Debug меню</string>
+    <string name="debug_menu_subtitle">Тестирование и проверка функций приложения</string>
+    <string name="debug_check_update_title">Проверить обновление сейчас</string>
+    <string name="debug_check_update_desc">Принудительный запрос к GitHub API без ожидания 24ч</string>
+    <string name="debug_test_update_title">Тест уведомления об обновлении</string>
+    <string name="debug_test_update_desc">Открыть диалог новой версии v1.0.1 с описанием</string>
+    <string name="debug_reset_timer_title">Сбросить таймер проверки (24ч)</string>
+    <string name="debug_reset_timer_desc">Очистить время последней проверки в настройках</string>
+    <string name="debug_generate_logs_title">Сгенерировать тестовые логи</string>
+    <string name="debug_generate_logs_desc">Отправить сообщения [D], [I], [W], [E] в журнал</string>
+    <string name="debug_toggle_verbose_title">Режим отладки логов</string>
+    <string name="debug_toggle_verbose_desc">Текущий уровень: %s (нажмите для смены)</string>
+    <string name="debug_test_delete_title">Тест диалога удаления</string>
+    <string name="debug_test_delete_desc">Проверить стилизованное подтверждение удаления</string>
+    <string name="debug_up_to_date">У вас установлена последняя версия (%s)</string>
+    <string name="debug_timer_reset_toast">Таймер проверки 24ч сброшен</string>
+    <string name="debug_logs_generated_toast">Тестовые логи добавлены в журнал</string>
 </resources>

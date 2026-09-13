@@ -29,11 +29,11 @@ class SplitTunnelPreferences(context: Context) {
         set(value) = prefs.edit().putString(KEY_MODE, value).apply()
 
     var bypassApps: Set<String>
-        get() = prefs.getStringSet(KEY_BYPASS_APPS, null) ?: RussianAppsPreset.PACKAGE_NAMES
+        get() = prefs.getStringSet(KEY_BYPASS_APPS, null)?.toSet() ?: RussianAppsPreset.PACKAGE_NAMES
         set(value) = prefs.edit().putStringSet(KEY_BYPASS_APPS, value).apply()
 
     var proxyApps: Set<String>
-        get() = prefs.getStringSet(KEY_PROXY_APPS, emptySet()) ?: emptySet()
+        get() = prefs.getStringSet(KEY_PROXY_APPS, emptySet())?.toSet() ?: emptySet()
         set(value) = prefs.edit().putStringSet(KEY_PROXY_APPS, value).apply()
 
     fun isInitialized(): Boolean = prefs.getBoolean(KEY_INITIALIZED, false)

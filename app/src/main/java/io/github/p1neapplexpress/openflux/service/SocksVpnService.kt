@@ -22,7 +22,7 @@ class SocksVpnService : android.net.VpnService() {
     private lateinit var tun2socks: Tun2SocksLauncher
     private lateinit var notifications: VpnNotificationManager
 
-    private var lastIntent: Intent? = null
+    @Volatile private var lastIntent: Intent? = null
 
     private val binder = object : IUnifiedService.Stub() {
         override fun isVpnRunning(): Boolean = vpn.isRunning.get()

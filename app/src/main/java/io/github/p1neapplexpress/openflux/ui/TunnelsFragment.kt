@@ -4,6 +4,7 @@ import android.animation.ObjectAnimator
 import android.animation.PropertyValuesHolder
 import android.animation.ValueAnimator
 import android.app.Activity.RESULT_OK
+import android.app.Dialog
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -13,6 +14,7 @@ import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.Window
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.LinearInterpolator
@@ -76,6 +78,7 @@ class TunnelsFragment : BaseFragment() {
     private var rotationAnim: ObjectAnimator? = null
     private var breathAnim: ObjectAnimator? = null
     private var currentVisualState: TunnelState? = null
+    private var isInitialStateBinding = true
     private var popup: PopupWindow? = null
 
     private val vpnPermission = registerForActivityResult(
@@ -100,16 +103,17 @@ class TunnelsFragment : BaseFragment() {
 
     private val pickQrImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri == null) return@registerForActivityResult
+        val ctx = requireContext()
         viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-            val decoded = QrDecoder.decodeFromUri(requireContext(), uri)
+            val decoded = QrDecoder.decodeFromUri(ctx, uri)
             withContext(Dispatchers.Main) {
-                val tunnel = if (decoded != null) TunnelLinkParser.parse(decoded, requireContext()) else null
+                val tunnel = if (decoded != null) TunnelLinkParser.parse(decoded, ctx) else null
                 if (tunnel != null) {
                     vm.addTunnel(tunnel)
                     vm.startTunnel(tunnel)
-                    Toast.makeText(requireContext(), R.string.config_saved, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(ctx, R.string.config_saved, Toast.LENGTH_SHORT).show()
                 } else {
-                    Toast.makeText(requireContext(), R.string.qr_scan_failed, Toast.LENGTH_LONG).show()
+                    Toast.makeText(ctx, R.string.qr_scan_failed, Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -220,7 +224,7 @@ class TunnelsFragment : BaseFragment() {
 
         configDot.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            vm.checkSelectedHealth()
+            vm.checkSelectedHealth(force = true)
         }
 
         val themePrefs = ThemePreferences(requireContext())
@@ -242,12 +246,24 @@ class TunnelsFragment : BaseFragment() {
 
         view.findViewById<View>(R.id.switchButton).setOnClickListener {
             parentFragmentManager.beginTransaction()
+                .setCustomAnimations(
+                    R.anim.slide_in_right,
+                    R.anim.slide_out_left,
+                    R.anim.slide_in_left,
+                    R.anim.slide_out_right
+                )
                 .replace(R.id.main, AddTunFragment.new())
                 .addToBackStack("switch")
                 .commit()
         }
-        if (vm.active.value is TunnelState.Idle) {
+        if (vm.active.value is TunnelState.Running) {
+            uptimeContainer.alpha = 1f
+            uptimeContainer.translationY = 0f
+            statusText.translationY = 0f
+        } else if (vm.active.value is TunnelState.Idle) {
             statusText.translationY = 64f * resources.displayMetrics.density
+            uptimeContainer.alpha = 0f
+            uptimeContainer.translationY = 12f
         }
 
         view.findViewById<View>(R.id.addButton).setOnClickListener {
@@ -260,7 +276,7 @@ class TunnelsFragment : BaseFragment() {
 
     override fun onResume() {
         super.onResume()
-        vm.checkSelectedHealth()
+        vm.checkSelectedHealth(force = false)
     }
 
     private fun requestVpnAndStart() {
@@ -325,10 +341,23 @@ class TunnelsFragment : BaseFragment() {
             return
         }
 
+        vm.probeAllTunnels()
+
         val inflater = LayoutInflater.from(requireContext())
         val content = inflater.inflate(R.layout.dropdown_configs, null)
         val items = content.findViewById<LinearLayout>(R.id.dropdown_items)
         val selectedId = vm.selectedTunnelId
+        val rowDots = mutableMapOf<Long, View>()
+
+        fun tintDot(dot: View, health: TunnelHealth) {
+            val colorRes = when (health) {
+                TunnelHealth.AVAILABLE -> R.color.state_running
+                TunnelHealth.UNAVAILABLE -> R.color.state_error
+                TunnelHealth.CHECKING -> R.color.state_connecting
+                TunnelHealth.UNKNOWN -> R.color.state_idle
+            }
+            dot.background?.setTint(ContextCompat.getColor(requireContext(), colorRes))
+        }
 
         for (tunnel in tunnels) {
             val row = inflater.inflate(R.layout.item_dropdown_config, items, false)
@@ -343,11 +372,12 @@ class TunnelsFragment : BaseFragment() {
             if (isSelected) {
                 nameView.setTextColor(ContextCompat.getColor(requireContext(), R.color.accent_blue))
                 nameView.setTypeface(null, Typeface.BOLD)
-                dot.background?.setTint(ContextCompat.getColor(requireContext(), R.color.accent_blue))
             } else {
                 nameView.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary))
-                dot.background?.setTint(ContextCompat.getColor(requireContext(), R.color.text_tertiary))
             }
+
+            tintDot(dot, vm.getTunnelHealth(tunnel.id))
+            rowDots[tunnel.id] = dot
 
             row.setOnClickListener {
                 it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -417,7 +447,18 @@ class TunnelsFragment : BaseFragment() {
             .start()
 
         chevron.animate().rotation(180f).setDuration(220L).setInterpolator(DecelerateInterpolator()).start()
+
+        val healthCollectorJob = viewLifecycleOwner.lifecycleScope.launch {
+            vm.healthMap.collect { map ->
+                for ((id, h) in map) {
+                    val d = rowDots[id] ?: continue
+                    tintDot(d, h)
+                }
+            }
+        }
+
         pw.setOnDismissListener {
+            healthCollectorJob.cancel()
             chevron.animate().rotation(0f).setDuration(180L).setInterpolator(DecelerateInterpolator()).start()
             popup = null
         }
@@ -447,6 +488,12 @@ class TunnelsFragment : BaseFragment() {
             menu.dismiss()
             popup?.dismiss()
             parentFragmentManager.beginTransaction()
+                .setCustomAnimations(
+                    R.anim.slide_in_right,
+                    R.anim.slide_out_left,
+                    R.anim.slide_in_left,
+                    R.anim.slide_out_right
+                )
                 .replace(R.id.main, AddTunFragment.edit(tunnel))
                 .addToBackStack("edit")
                 .commit()
@@ -484,24 +531,133 @@ class TunnelsFragment : BaseFragment() {
             return
         }
 
-        androidx.appcompat.app.AlertDialog.Builder(requireContext())
-            .setTitle(R.string.delete_config_title)
-            .setMessage(R.string.delete_config_msg)
-            .setNegativeButton(R.string.cancel, null)
-            .setPositiveButton(R.string.action_delete) { _, _ ->
-                vm.removeTunnel(tunnel)
-                popup?.dismiss()
-                Toast.makeText(requireContext(), R.string.config_deleted, Toast.LENGTH_SHORT).show()
-            }
-            .show()
+        val dialog = Dialog(requireContext())
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+
+        val dialogView = layoutInflater.inflate(R.layout.dialog_confirm_delete, null)
+        dialog.setContentView(dialogView)
+
+        dialogView.findViewById<TextView>(R.id.dialog_title).text = getString(R.string.delete_config_title)
+        dialogView.findViewById<TextView>(R.id.dialog_message).text =
+            "«${tunnel.name}»\n${getString(R.string.delete_config_msg)}"
+
+        dialogView.findViewById<View>(R.id.btn_cancel).setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            dialog.dismiss()
+        }
+
+        dialogView.findViewById<View>(R.id.btn_delete).setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            dialog.dismiss()
+            vm.removeTunnel(tunnel)
+            popup?.dismiss()
+            Toast.makeText(requireContext(), R.string.config_deleted, Toast.LENGTH_SHORT).show()
+        }
+
+        dialog.show()
+
+        val width = (resources.displayMetrics.widthPixels * 0.88).toInt()
+        dialog.window?.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT)
     }
 
     private fun applyState(state: TunnelState) {
-        if (state == currentVisualState) return
+        val isFirst = isInitialStateBinding
+        isInitialStateBinding = false
+
+        if (state == currentVisualState && !isFirst) return
         currentVisualState = state
 
         val color = state.color
         aurora.setStateColor(color)
+
+        if (isFirst) {
+            when (state) {
+                is TunnelState.Idle -> {
+                    statusText.text = getString(R.string.tap_to_connect)
+                    statusText.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary))
+                    statusText.alpha = 1f
+                    statusText.translationY = 64f * resources.displayMetrics.density
+                    aurora.setIntensity(0.4f)
+                    pulseRings.stop()
+                    stopRotation()
+                    startBreath()
+                    powerIcon.scaleX = 1f
+                    powerIcon.scaleY = 1f
+                    powerIcon.alpha = 0.92f
+                    connectButton.scaleX = 1f
+                    connectButton.scaleY = 1f
+                    uptimeContainer.animate().cancel()
+                    uptimeContainer.alpha = 0f
+                    uptimeContainer.translationY = 12f
+                }
+                is TunnelState.Connecting,
+                is TunnelState.StartingTransport,
+                is TunnelState.StartingTun2Socks -> {
+                    val label = when (state) {
+                        is TunnelState.Connecting -> getString(R.string.connecting)
+                        is TunnelState.StartingTransport -> getString(R.string.starting_transport)
+                        is TunnelState.StartingTun2Socks -> getString(R.string.starting_tsocks)
+                        else -> ""
+                    }
+                    statusText.text = label
+                    statusText.setTextColor(color)
+                    statusText.alpha = 1f
+                    statusText.translationY = 0f
+                    aurora.setIntensity(0.75f)
+                    startRotation()
+                    pulseRings.setColor(color)
+                    pulseRings.start(color, intervalMs = 1800L)
+                    stopBreath()
+                    powerIcon.scaleX = 0.94f
+                    powerIcon.scaleY = 0.94f
+                    powerIcon.alpha = 0.7f
+                    connectButton.scaleX = 1f
+                    connectButton.scaleY = 1f
+                    uptimeContainer.animate().cancel()
+                    uptimeContainer.alpha = 0f
+                    uptimeContainer.translationY = 12f
+                }
+                is TunnelState.Running -> {
+                    statusText.text = getString(R.string.running)
+                    statusText.setTextColor(color)
+                    statusText.alpha = 1f
+                    statusText.translationY = 0f
+                    aurora.setIntensity(1f)
+                    stopRotation()
+                    pulseRings.setColor(color)
+                    pulseRings.start(color, intervalMs = 1400L)
+                    startBreath()
+                    powerIcon.scaleX = 1.08f
+                    powerIcon.scaleY = 1.08f
+                    powerIcon.alpha = 1f
+                    connectButton.scaleX = 1f
+                    connectButton.scaleY = 1f
+                    uptimeContainer.animate().cancel()
+                    uptimeContainer.alpha = 1f
+                    uptimeContainer.translationY = 0f
+                }
+                is TunnelState.Error -> {
+                    statusText.text = state.message
+                    statusText.setTextColor(color)
+                    statusText.alpha = 1f
+                    statusText.translationY = 0f
+                    aurora.setIntensity(0.9f)
+                    pulseRings.stop()
+                    stopRotation()
+                    stopBreath()
+                    powerIcon.scaleX = 1f
+                    powerIcon.scaleY = 1f
+                    powerIcon.alpha = 1f
+                    connectButton.scaleX = 1f
+                    connectButton.scaleY = 1f
+                    uptimeContainer.animate().cancel()
+                    uptimeContainer.alpha = 0f
+                    uptimeContainer.translationY = 12f
+                }
+            }
+            return
+        }
 
         when (state) {
             is TunnelState.Idle -> {
@@ -686,6 +842,8 @@ class TunnelsFragment : BaseFragment() {
         pulseRings.stop()
         popup?.dismiss()
         popup = null
+        currentVisualState = null
+        isInitialStateBinding = true
         super.onDestroyView()
     }
 

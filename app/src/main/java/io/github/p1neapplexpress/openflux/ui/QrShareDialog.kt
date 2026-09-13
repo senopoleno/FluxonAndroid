@@ -20,6 +20,10 @@ import io.github.p1neapplexpress.openflux.R
 import io.github.p1neapplexpress.openflux.data.Tunnel
 import io.github.p1neapplexpress.openflux.util.QrGenerator
 import io.github.p1neapplexpress.openflux.util.TunnelLinkParser
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -68,33 +72,39 @@ object QrShareDialog {
 
         view.findViewById<View>(R.id.btn_share_qr).setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            try {
-                val imagesDir = File(context.cacheDir, "shared_images").apply { mkdirs() }
-                val imageFile = File(imagesDir, "qr_${tunnel.id}.png")
-                FileOutputStream(imageFile).use { fos ->
-                    qrBitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
-                }
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val imagesDir = File(context.cacheDir, "shared_images").apply { mkdirs() }
+                    val imageFile = File(imagesDir, "qr_${tunnel.id}.png")
+                    FileOutputStream(imageFile).use { fos ->
+                        qrBitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
+                    }
 
-                val uri = FileProvider.getUriForFile(
-                    context,
-                    "${context.packageName}.fileprovider",
-                    imageFile
-                )
+                    val uri = FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        imageFile
+                    )
 
-                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = "image/png"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    putExtra(Intent.EXTRA_SUBJECT, tunnel.name)
-                    putExtra(Intent.EXTRA_TEXT, "${tunnel.name}\n$configLink")
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "image/png"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        putExtra(Intent.EXTRA_SUBJECT, tunnel.name)
+                        putExtra(Intent.EXTRA_TEXT, configLink)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
 
-                val chooser = Intent.createChooser(shareIntent, context.getString(R.string.action_share_qr)).apply {
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    val chooser = Intent.createChooser(shareIntent, context.getString(R.string.action_share_qr)).apply {
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    withContext(Dispatchers.Main) {
+                        context.startActivity(chooser)
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Не удалось поделиться: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
                 }
-                context.startActivity(chooser)
-            } catch (e: Exception) {
-                Toast.makeText(context, "Не удалось поделиться: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
 

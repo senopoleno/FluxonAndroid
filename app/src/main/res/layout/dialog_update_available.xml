@@ -1,0 +1,116 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:gravity="center_horizontal"
+    android:background="@drawable/bg_menu_popup"
+    android:padding="22dp">
+
+    <!-- Icon Badge -->
+    <FrameLayout
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:background="@drawable/bg_update_badge">
+
+        <ImageView
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_update"
+            app:tint="@color/accent_blue"
+            android:contentDescription="@null" />
+
+    </FrameLayout>
+
+    <!-- Title -->
+    <TextView
+        android:id="@+id/update_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:gravity="center"
+        android:textColor="@color/text_primary"
+        android:textSize="18sp"
+        android:fontFamily="sans-serif-bold"
+        android:text="@string/update_available_title" />
+
+    <!-- Version Subtitle -->
+    <TextView
+        android:id="@+id/update_version_info"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="center"
+        android:textColor="@color/accent_blue"
+        android:textSize="13sp"
+        android:fontFamily="sans-serif-medium"
+        tools:text="Версия v1.0.1 • Текущая v1.0.0" />
+
+    <!-- Changelog / Release notes -->
+    <ScrollView
+        android:id="@+id/update_notes_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:maxHeight="160dp"
+        android:background="@drawable/bg_changelog_box"
+        android:padding="12dp">
+
+        <TextView
+            android:id="@+id/update_notes"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp"
+            android:lineSpacingExtra="2dp"
+            tools:text="Список изменений:\n- Улучшения производительности\n- Исправления ошибок" />
+
+    </ScrollView>
+
+    <!-- Buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:orientation="vertical">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_download_update"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="@string/action_update_download"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:fontFamily="sans-serif-medium"
+            app:icon="@drawable/ic_update"
+            app:iconSize="18dp"
+            app:iconTint="#FFFFFF"
+            app:iconPadding="8dp"
+            app:iconGravity="textStart"
+            app:backgroundTint="@color/accent_blue"
+            app:cornerRadius="12dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_update_later"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginTop="8dp"
+            android:text="@string/action_update_later"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp"
+            android:fontFamily="sans-serif-medium"
+            app:strokeColor="@color/bg_card_stroke"
+            app:cornerRadius="12dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp" />
+
+    </LinearLayout>
+
+</LinearLayout>

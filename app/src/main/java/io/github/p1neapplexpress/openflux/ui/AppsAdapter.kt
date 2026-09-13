@@ -48,16 +48,6 @@ class AppsAdapter(
         onListFiltered?.invoke(displayedApps.size)
     }
 
-    fun toggleAll(select: Boolean) {
-        for (app in displayedApps) {
-            if (app.isSelected != select) {
-                app.isSelected = select
-                onAppSelectionChanged(app)
-            }
-        }
-        notifyDataSetChanged()
-    }
-
     fun getDisplayedApps(): List<AppItem> = displayedApps
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): AppViewHolder {

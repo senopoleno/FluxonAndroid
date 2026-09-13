@@ -59,53 +59,51 @@
 
     </androidx.cardview.widget.CardView>
 
-    <!-- Actions: Copy and Share buttons -->
+    <!-- Actions: Share (top) and Copy (bottom) buttons -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="20dp"
-        android:orientation="horizontal">
+        android:orientation="vertical">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_share_qr"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="@string/btn_share"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:fontFamily="sans-serif-medium"
+            app:icon="@drawable/ic_share"
+            app:iconSize="18dp"
+            app:iconTint="#FFFFFF"
+            app:iconPadding="8dp"
+            app:iconGravity="textStart"
+            app:backgroundTint="@color/accent_blue"
+            app:cornerRadius="12dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_copy_json"
             style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="48dp"
-            android:layout_weight="1"
+            android:layout_marginTop="10dp"
             android:text="@string/btn_copy_json"
             android:textColor="@color/text_primary"
-            android:textSize="13sp"
-            android:singleLine="true"
-            android:ellipsize="end"
-            android:paddingHorizontal="10dp"
+            android:textSize="14sp"
+            android:fontFamily="sans-serif-medium"
             app:icon="@drawable/ic_content_copy"
-            app:iconSize="16dp"
+            app:iconSize="18dp"
             app:iconTint="@color/text_primary"
-            app:iconPadding="6dp"
+            app:iconPadding="8dp"
+            app:iconGravity="textStart"
             app:strokeColor="@color/bg_card_stroke"
-            app:cornerRadius="12dp" />
-
-        <Space
-            android:layout_width="10dp"
-            android:layout_height="1dp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_share_qr"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:text="@string/btn_share"
-            android:textColor="#FFFFFF"
-            android:textSize="13sp"
-            android:singleLine="true"
-            android:ellipsize="end"
-            android:paddingHorizontal="10dp"
-            app:icon="@drawable/ic_share"
-            app:iconSize="16dp"
-            app:iconTint="#FFFFFF"
-            app:iconPadding="6dp"
-            app:backgroundTint="@color/accent_blue"
-            app:cornerRadius="12dp" />
+            app:cornerRadius="12dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp" />
 
     </LinearLayout>
 

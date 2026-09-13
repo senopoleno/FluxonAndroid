@@ -46,5 +46,4 @@ object ProcessRunner {
         }
     }
 
-    fun join(list: List<String>, sep: String): String = list.joinToString(sep)
 }

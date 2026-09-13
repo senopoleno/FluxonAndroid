@@ -43,7 +43,7 @@
     <string name="add_tunnel_short">Add</string>
     <string name="no_tunnel">No tunnel</string>
     <string name="uptime_label">Connected for</string>
-    <string name="select_config">Configuration</string>
+    <string name="select_config">Configurations</string>
     <string name="no_configs">No configurations</string>
     <string name="action_edit">Edit</string>
     <string name="action_delete">Delete</string>
@@ -136,4 +136,30 @@
     <string name="err_invalid_yandex_url">URL must be a valid Yandex Disk / Docs link</string>
     <string name="err_max_token_required">MAX token is required</string>
     <string name="err_max_uid_required">MAX user ID must be a valid positive number</string>
+
+    <!-- App Update -->
+    <string name="update_available_title">Update Available</string>
+    <string name="update_version_format">Version %1$s • Current %2$s</string>
+    <string name="action_update_download">Download update</string>
+    <string name="action_update_later">Remind later</string>
+    <string name="update_no_changelog">A new version of Fluxon is available.</string>
+
+    <!-- Debug Menu -->
+    <string name="debug_menu_title">Debug Menu</string>
+    <string name="debug_menu_subtitle">Test and verify application features</string>
+    <string name="debug_check_update_title">Check for updates now</string>
+    <string name="debug_check_update_desc">Force GitHub API check without waiting 24h</string>
+    <string name="debug_test_update_title">Test update notification</string>
+    <string name="debug_test_update_desc">Open new version v1.0.1 dialog with changelog</string>
+    <string name="debug_reset_timer_title">Reset check timer (24h)</string>
+    <string name="debug_reset_timer_desc">Clear last update check timestamp in preferences</string>
+    <string name="debug_generate_logs_title">Generate test logs</string>
+    <string name="debug_generate_logs_desc">Send [D], [I], [W], [E] messages to event log</string>
+    <string name="debug_toggle_verbose_title">Log debug mode</string>
+    <string name="debug_toggle_verbose_desc">Current level: %s (tap to toggle)</string>
+    <string name="debug_test_delete_title">Test delete dialog</string>
+    <string name="debug_test_delete_desc">Verify stylized deletion confirmation dialog</string>
+    <string name="debug_up_to_date">You have the latest version (%s)</string>
+    <string name="debug_timer_reset_toast">24h check timer reset</string>
+    <string name="debug_logs_generated_toast">Test logs added to event log</string>
 </resources>

@@ -108,7 +108,8 @@ class Tun2SocksLauncher(private val context: Context) {
         add("--socks-server-addr"); add("$server:$port")
         add("--tunfd"); add(fd.toString())
         add("--tunmtu"); add(TUN_MTU.toString())
-        add("--loglevel"); add(LOG_LEVEL)
+        val logLevel = if (Logx.isVerbose) "4" else LOG_LEVEL
+        add("--loglevel"); add(logLevel)
         add("--pid"); add("${context.filesDir}/tun2socks.pid")
         add("--sock"); add(sockPath.absolutePath)
         if (!user.isNullOrEmpty()) {

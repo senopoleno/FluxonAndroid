@@ -19,7 +19,7 @@ object Routes {
             if (network.startsWith("127")) continue
             val prefix = parts[1].toIntOrNull() ?: continue
             if (prefix !in 0..32) continue
-            builder.addRoute(network, prefix)
+            runCatching { builder.addRoute(network, prefix) }
         }
     }
 }

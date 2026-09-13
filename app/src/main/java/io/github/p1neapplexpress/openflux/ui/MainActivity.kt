@@ -15,6 +15,7 @@ import androidx.core.view.updatePadding
 import androidx.lifecycle.lifecycleScope
 import io.github.p1neapplexpress.openflux.R
 import io.github.p1neapplexpress.openflux.event.EventBus
+import io.github.p1neapplexpress.openflux.util.AppUpdateChecker
 import io.github.p1neapplexpress.openflux.util.ThemePreferences
 import io.github.p1neapplexpress.openflux.util.TunnelLinkParser
 import kotlinx.coroutines.launch
@@ -22,6 +23,11 @@ import kotlinx.coroutines.launch
 class MainActivity : AppCompatActivity() {
 
     private val vm: TunnelsViewModel by viewModels()
+
+    override fun onResume() {
+        super.onResume()
+        AppUpdateChecker.checkForUpdate(this)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         ThemePreferences(this).applyTheme()

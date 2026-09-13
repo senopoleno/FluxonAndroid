@@ -141,16 +141,13 @@
 
         </LinearLayout>
 
-        <!-- Speed Pill (Below Uptime) -->
+        <!-- Speed (Below Uptime, Clean Text without Background Pill) -->
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
             android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingHorizontal="12dp"
-            android:paddingVertical="4dp"
-            android:background="@drawable/bg_config_selector">
+            android:gravity="center_vertical">
 
             <ImageView
                 android:id="@+id/speedIcon"
@@ -165,7 +162,7 @@
                 android:id="@+id/speedText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="@color/text_primary"
+                android:textColor="@color/text_secondary"
                 android:textSize="12sp"
                 android:fontFamily="monospace"
                 tools:text="↓ 0 B/s   ↑ 0 B/s" />

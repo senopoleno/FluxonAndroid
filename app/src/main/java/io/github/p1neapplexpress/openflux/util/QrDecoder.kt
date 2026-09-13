@@ -23,7 +23,11 @@ object QrDecoder {
             val bitmap = BitmapFactory.decodeStream(inputStream, null, opts)
             inputStream.close()
             if (bitmap == null) return null
-            decodeFromBitmap(bitmap)
+            try {
+                decodeFromBitmap(bitmap)
+            } finally {
+                bitmap.recycle()
+            }
         } catch (e: Exception) {
             Logx.e(TAG, "Failed to decode QR from URI", e)
             null
@@ -38,30 +42,34 @@ object QrDecoder {
             bitmap
         }
 
-        val width = target.width
-        val height = target.height
-        val pixels = IntArray(width * height)
-        target.getPixels(pixels, 0, width, 0, 0, width, height)
-
-        val source = RGBLuminanceSource(width, height, pixels)
-        val hints = mapOf(
-            DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE),
-            DecodeHintType.TRY_HARDER to true,
-            DecodeHintType.CHARACTER_SET to "UTF-8"
-        )
-
         try {
-            val binary = BinaryBitmap(HybridBinarizer(source))
-            val result = MultiFormatReader().decode(binary, hints)
-            return result.text
-        } catch (_: Exception) {}
-
-        try {
-            val binary = BinaryBitmap(GlobalHistogramBinarizer(source))
-            val result = MultiFormatReader().decode(binary, hints)
-            return result.text
-        } catch (_: Exception) {}
-
-        return null
+            val width = target.width
+            val height = target.height
+            val pixels = IntArray(width * height)
+            target.getPixels(pixels, 0, width, 0, 0, width, height)
+    
+            val source = RGBLuminanceSource(width, height, pixels)
+            val hints = mapOf(
+                DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE),
+                DecodeHintType.TRY_HARDER to true,
+                DecodeHintType.CHARACTER_SET to "UTF-8"
+            )
+    
+            try {
+                val binary = BinaryBitmap(HybridBinarizer(source))
+                val result = MultiFormatReader().decode(binary, hints)
+                return result.text
+            } catch (_: Exception) {}
+    
+            try {
+                val binary = BinaryBitmap(GlobalHistogramBinarizer(source))
+                val result = MultiFormatReader().decode(binary, hints)
+                return result.text
+            } catch (_: Exception) {}
+    
+            return null
+        } finally {
+            if (target !== bitmap) target.recycle()
+        }
     }
 }

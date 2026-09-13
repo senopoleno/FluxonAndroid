@@ -19,8 +19,8 @@ class NativeProcessSupervisor(private val context: Context) {
     }
 
     private val handler = Handler(Looper.getMainLooper())
-    private var process: Process? = null
-    private var stdoutThread: Thread? = null
+    @Volatile private var process: Process? = null
+    @Volatile private var stdoutThread: Thread? = null
 
     private val running = AtomicBoolean(false)
     private val connected = AtomicBoolean(false)
@@ -51,13 +51,22 @@ class NativeProcessSupervisor(private val context: Context) {
         val libPath = "${context.applicationInfo.nativeLibraryDir}/$NATIVE_LIB"
         try {
             
-            val cmd = listOf(libPath, "--debug") + payload
+            val isDebug = payload.contains("--debug") || Logx.isVerbose
+            val cleanPayload = payload.filter { it != "--debug" }
+            val cmd = buildList {
+                add(libPath)
+                if (isDebug) {
+                    add("--debug")
+                }
+                addAll(cleanPayload)
+            }
             Logx.i(TAG, "exec: ${cmd.joinToString(" ")}")
 
             val pb = ProcessBuilder(cmd)
                 .directory(context.filesDir)
                 .redirectErrorStream(true)
             process = pb.start()
+            process!!.outputStream.close()
 
             stdoutThread = Thread {
                 try {
