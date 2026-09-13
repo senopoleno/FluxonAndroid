@@ -7,6 +7,13 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
+import android.text.style.RelativeSizeSpan
+import android.text.style.StyleSpan
+import android.text.style.TypefaceSpan
+import android.graphics.Typeface
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
@@ -192,7 +199,7 @@ object AppUpdateChecker {
         val notesView = view.findViewById<TextView>(R.id.update_notes)
         val body = release.body?.trim().orEmpty()
         if (body.isNotEmpty()) {
-            notesView.text = body
+            notesView.text = renderMarkdown(body)
         } else {
             notesView.text = activity.getString(R.string.update_no_changelog)
         }
@@ -219,5 +226,104 @@ object AppUpdateChecker {
 
         val width = (activity.resources.displayMetrics.widthPixels * 0.88).toInt()
         dialog.window?.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT)
+    }
+
+    /**
+     * Lightweight GitHub Markdown → SpannableString renderer.
+     * Supports: ### headers, **bold**, *italic*, `code`, - bullets, blank line spacing.
+     */
+    private fun renderMarkdown(raw: String): CharSequence {
+        val sb = SpannableStringBuilder()
+        val lines = raw.lines()
+        var i = 0
+        while (i < lines.size) {
+            val line = lines[i]
+            val trimmed = line.trim()
+            when {
+                // H3 ###
+                trimmed.startsWith("### ") -> {
+                    if (sb.isNotEmpty()) sb.append("\n")
+                    val text = trimmed.removePrefix("### ")
+                    val start = sb.length
+                    sb.append(renderInline(text))
+                    sb.setSpan(StyleSpan(Typeface.BOLD), start, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    sb.setSpan(RelativeSizeSpan(1.1f), start, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    sb.append("\n")
+                }
+                // H2 ##
+                trimmed.startsWith("## ") -> {
+                    if (sb.isNotEmpty()) sb.append("\n")
+                    val text = trimmed.removePrefix("## ")
+                    val start = sb.length
+                    sb.append(renderInline(text))
+                    sb.setSpan(StyleSpan(Typeface.BOLD), start, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    sb.setSpan(RelativeSizeSpan(1.15f), start, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    sb.append("\n")
+                }
+                // Bullet - or *
+                trimmed.startsWith("- ") || trimmed.startsWith("* ") -> {
+                    val text = trimmed.drop(2)
+                    sb.append("• ")
+                    sb.append(renderInline(text))
+                    sb.append("\n")
+                }
+                // Blank line → spacing
+                trimmed.isEmpty() -> {
+                    if (sb.isNotEmpty() && !sb.endsWith("\n\n")) sb.append("\n")
+                }
+                // Normal paragraph
+                else -> {
+                    sb.append(renderInline(trimmed))
+                    sb.append("\n")
+                }
+            }
+            i++
+        }
+        // Trim trailing newlines
+        while (sb.endsWith("\n")) sb.delete(sb.length - 1, sb.length)
+        return sb
+    }
+
+    /** Renders inline Markdown: **bold**, *italic*, `code` within a line. */
+    private fun renderInline(text: String): SpannableStringBuilder {
+        val sb = SpannableStringBuilder()
+        val len = text.length
+        var pos = 0
+        while (pos < len) {
+            when {
+                // **bold**
+                text.startsWith("**", pos) -> {
+                    val end = text.indexOf("**", pos + 2)
+                    if (end > pos + 2) {
+                        val start = sb.length
+                        sb.append(text.substring(pos + 2, end))
+                        sb.setSpan(StyleSpan(Typeface.BOLD), start, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                        pos = end + 2
+                    } else { sb.append(text[pos]); pos++ }
+                }
+                // *italic*
+                text.startsWith("*", pos) && !text.startsWith("**", pos) -> {
+                    val end = text.indexOf("*", pos + 1)
+                    if (end > pos + 1) {
+                        val start = sb.length
+                        sb.append(text.substring(pos + 1, end))
+                        sb.setSpan(StyleSpan(Typeface.ITALIC), start, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                        pos = end + 1
+                    } else { sb.append(text[pos]); pos++ }
+                }
+                // `code`
+                text[pos] == '`' -> {
+                    val end = text.indexOf('`', pos + 1)
+                    if (end > pos + 1) {
+                        val start = sb.length
+                        sb.append(text.substring(pos + 1, end))
+                        sb.setSpan(TypefaceSpan("monospace"), start, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                        pos = end + 1
+                    } else { sb.append(text[pos]); pos++ }
+                }
+                else -> { sb.append(text[pos]); pos++ }
+            }
+        }
+        return sb
     }
 }
