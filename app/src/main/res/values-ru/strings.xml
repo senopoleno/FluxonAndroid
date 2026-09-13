@@ -135,4 +135,10 @@
     <string name="import_confirm_message">Добавить конфигурацию «%s»?</string>
     <string name="btn_add_and_connect">Добавить и подключить</string>
     <string name="btn_add_only">Только добавить</string>
+
+    <!-- Валидация полей -->
+    <string name="err_invalid_url">Введите корректный URL (начиная с http:// или https://)</string>
+    <string name="err_invalid_yandex_url">URL должен быть ссылкой Яндекс Диска или Документов</string>
+    <string name="err_max_token_required">Введите токен MAX</string>
+    <string name="err_max_uid_required">User ID MAX должен быть положительным числом</string>
 </resources>

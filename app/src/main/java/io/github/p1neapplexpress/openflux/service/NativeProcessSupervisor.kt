@@ -71,6 +71,15 @@ class NativeProcessSupervisor(private val context: Context) {
                         }
                     }
                 } catch (_: Exception) {
+                } finally {
+                    val exitCode = try { process?.waitFor() } catch (_: Exception) { null }
+                    if (!shuttingDown.get()) {
+                        Logx.e(TAG, "native process exited unexpectedly with code $exitCode")
+                        connected.set(false)
+                        running.set(false)
+                        EventBus.dispatch(AppEvent.TransportDisconnected)
+                        EventBus.dispatch(AppEvent.LogMessage("[E] Native transport process exited (code $exitCode)"))
+                    }
                 }
             }.apply {
                 name = "NativeStdoutReader"
@@ -78,17 +87,28 @@ class NativeProcessSupervisor(private val context: Context) {
                 start()
             }
 
-            
             handler.postDelayed({
                 if (!shuttingDown.get()) {
-                    connected.set(true)
-                    EventBus.dispatch(AppEvent.TransportConnected)
-                    Logx.i(TAG, "native process up")
+                    if (process?.isAlive == true) {
+                        connected.set(true)
+                        EventBus.dispatch(AppEvent.TransportConnected)
+                        Logx.i(TAG, "native process up")
+                    } else {
+                        Logx.e(TAG, "native process died during startup")
+                        connected.set(false)
+                        running.set(false)
+                        EventBus.dispatch(AppEvent.TransportDisconnected)
+                        EventBus.dispatch(AppEvent.LogMessage("[E] Native transport failed to start (process exited)"))
+                    }
                 }
             }, STARTUP_GRACE_MS)
 
         } catch (e: Exception) {
             Logx.e(TAG, "spawn failed", e)
+            running.set(false)
+            connected.set(false)
+            EventBus.dispatch(AppEvent.TransportDisconnected)
+            EventBus.dispatch(AppEvent.LogMessage("[E] Spawn failed: ${e.message}"))
         }
     }
 

@@ -130,4 +130,10 @@
     <string name="import_confirm_message">Add configuration \"%s\"?</string>
     <string name="btn_add_and_connect">Add &amp; Connect</string>
     <string name="btn_add_only">Add only</string>
+
+    <!-- Validation -->
+    <string name="err_invalid_url">Please enter a valid URL (starting with http:// or https://)</string>
+    <string name="err_invalid_yandex_url">URL must be a valid Yandex Disk / Docs link</string>
+    <string name="err_max_token_required">MAX token is required</string>
+    <string name="err_max_uid_required">MAX user ID must be a valid positive number</string>
 </resources>

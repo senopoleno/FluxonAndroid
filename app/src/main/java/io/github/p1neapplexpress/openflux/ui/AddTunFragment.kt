@@ -10,8 +10,10 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
+import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.activityViewModels
 import com.google.android.material.switchmaterial.SwitchMaterial
+import com.google.android.material.textfield.TextInputLayout
 import io.github.p1neapplexpress.openflux.R
 import io.github.p1neapplexpress.openflux.data.TransportType
 import io.github.p1neapplexpress.openflux.data.Tunnel
@@ -52,9 +54,15 @@ class AddTunFragment : BaseFragment() {
         i.inflate(R.layout.fragment_add_tun, c, false)
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        val btnBack = view.findViewById<View>(R.id.btn_back)
+        val headerTitle = view.findViewById<TextView>(R.id.headerTitle)
+        val nameContainer = view.findViewById<TextInputLayout>(R.id.nameContainer)
         val transportLayout = view.findViewById<View>(R.id.select_transport_layout)
         val maxContainer = view.findViewById<View>(R.id.maxContainer)
-        val yandexContainer = view.findViewById<View>(R.id.yandexUrlContainer)
+        val maxTokenContainer = view.findViewById<TextInputLayout>(R.id.maxTokenContainer)
+        val maxUserIdContainer = view.findViewById<TextInputLayout>(R.id.maxUserIdContainer)
+        val yandexContainer = view.findViewById<TextInputLayout>(R.id.yandexUrlContainer)
+        val encryptionKeyContainer = view.findViewById<TextInputLayout>(R.id.encryptionKeyContainer)
         val transportLabel = view.findViewById<TextView>(R.id.selectedTransport)
         val debugSwitch = view.findViewById<SwitchMaterial>(R.id.debugSwitch)
         val docUrl = view.findViewById<TextView>(R.id.documentUrl)
@@ -64,8 +72,20 @@ class AddTunFragment : BaseFragment() {
         val encryptionKey = view.findViewById<TextView>(R.id.encryptionKey)
         val save = view.findViewById<Button>(R.id.saveButton)
 
+        btnBack.setOnClickListener {
+            requireActivity().onBackPressedDispatcher.onBackPressed()
+        }
+
+        // Clear errors on typing
+        name.doAfterTextChanged { nameContainer.error = null }
+        docUrl.doAfterTextChanged { yandexContainer.error = null }
+        maxToken.doAfterTextChanged { maxTokenContainer.error = null }
+        maxUid.doAfterTextChanged { maxUserIdContainer.error = null }
+        encryptionKey.doAfterTextChanged { encryptionKeyContainer.error = null }
+
         // ─── Заполнение при редактировании ───
         editing?.let { t ->
+            headerTitle.text = getString(R.string.edit_config)
             name.setText(t.name)
             transport = TransportType.from(t.transportType)
 
@@ -118,18 +138,27 @@ class AddTunFragment : BaseFragment() {
                     maxContainer.isVisible = false
                     yandexContainer.isVisible = true
                     transportLabel.text = getString(R.string.yandex_docs_backend)
+                    yandexContainer.error = null
+                    maxTokenContainer.error = null
+                    maxUserIdContainer.error = null
                 },
                 onVyandex = {
                     transport = TransportType.vyandex
                     maxContainer.isVisible = false
                     yandexContainer.isVisible = true
                     transportLabel.text = getString(R.string.vyandex_backend)
+                    yandexContainer.error = null
+                    maxTokenContainer.error = null
+                    maxUserIdContainer.error = null
                 },
                 onMax = {
                     transport = TransportType.max
                     maxContainer.isVisible = true
                     yandexContainer.isVisible = false
                     transportLabel.text = getString(R.string.max_messenger_backend)
+                    yandexContainer.error = null
+                    maxTokenContainer.error = null
+                    maxUserIdContainer.error = null
                 },
             )
         }
@@ -139,24 +168,76 @@ class AddTunFragment : BaseFragment() {
         }
 
         save.setOnClickListener {
-            val n = name.text.trim().toString()
+            val n = name.text?.toString()?.trim().orEmpty()
             if (n.isEmpty()) {
-                Toast.makeText(requireContext(), R.string.name_required, Toast.LENGTH_SHORT).show()
+                nameContainer.error = getString(R.string.name_required)
+                name.requestFocus()
                 return@setOnClickListener
+            }
+            nameContainer.error = null
+
+            val url = docUrl.text?.toString()?.trim().orEmpty()
+            val token = maxToken.text?.toString()?.trim().orEmpty()
+            val uidStr = maxUid.text?.toString()?.trim().orEmpty()
+
+            when (transport) {
+                TransportType.yandex, TransportType.vyandex -> {
+                    if (url.isEmpty()) {
+                        yandexContainer.error = getString(R.string.err_invalid_url)
+                        docUrl.requestFocus()
+                        return@setOnClickListener
+                    }
+                    if (!url.startsWith("http://", ignoreCase = true) && !url.startsWith("https://", ignoreCase = true)) {
+                        yandexContainer.error = getString(R.string.err_invalid_url)
+                        docUrl.requestFocus()
+                        return@setOnClickListener
+                    }
+                    val host = runCatching { java.net.URI(url).host }.getOrNull()?.lowercase()
+                    if (host.isNullOrEmpty() || !host.contains(".")) {
+                        yandexContainer.error = getString(R.string.err_invalid_url)
+                        docUrl.requestFocus()
+                        return@setOnClickListener
+                    }
+                    val isYandexDomain = host.contains("yandex.") || host.contains("yadi.sk") || host.contains("ya.ru")
+                    if (!isYandexDomain) {
+                        yandexContainer.error = getString(R.string.err_invalid_yandex_url)
+                        docUrl.requestFocus()
+                        return@setOnClickListener
+                    }
+                    yandexContainer.error = null
+                }
+                TransportType.max -> {
+                    if (token.isEmpty()) {
+                        maxTokenContainer.error = getString(R.string.err_max_token_required)
+                        maxToken.requestFocus()
+                        return@setOnClickListener
+                    }
+                    maxTokenContainer.error = null
+
+                    val uid = uidStr.toLongOrNull()
+                    if (uid == null || uid <= 0) {
+                        maxUserIdContainer.error = getString(R.string.err_max_uid_required)
+                        maxUid.requestFocus()
+                        return@setOnClickListener
+                    }
+                    maxUserIdContainer.error = null
+                }
             }
 
-            val encKey = encryptionKey.text.trim().toString()
+            val encKey = encryptionKey.text?.toString()?.trim().orEmpty()
             if (encKey.isNotEmpty() && encKey.length < 16) {
-                Toast.makeText(requireContext(), R.string.err_encryption_key_short, Toast.LENGTH_SHORT).show()
+                encryptionKeyContainer.error = getString(R.string.err_encryption_key_short)
+                encryptionKey.requestFocus()
                 return@setOnClickListener
             }
+            encryptionKeyContainer.error = null
 
             val newTunnel = createTunnel(
                 id = editing?.id ?: Random(System.currentTimeMillis()).nextLong(),
                 name = n,
-                docUrl = docUrl.text.trim().toString(),
-                maxToken = maxToken.text.trim().toString(),
-                maxUid = maxUid.text.trim().toString(),
+                docUrl = url,
+                maxToken = token,
+                maxUid = uidStr,
                 encKey = encKey,
             ) ?: return@setOnClickListener
 
@@ -172,6 +253,7 @@ class AddTunFragment : BaseFragment() {
         }
 
         if (editing == null) {
+            headerTitle.text = getString(R.string.enter_manually)
             transportLabel.text = getString(R.string.yandex_docs_backend)
         }
     }

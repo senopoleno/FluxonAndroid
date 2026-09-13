@@ -12,15 +12,50 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:paddingHorizontal="20dp"
-        android:paddingTop="24dp"
+        android:paddingTop="16dp"
         android:paddingBottom="32dp">
+
+        <!-- Top Bar with Back Button & Title -->
+        <LinearLayout
+            android:id="@+id/top_bar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingBottom="12dp">
+
+            <ImageView
+                android:id="@+id/btn_back"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:contentDescription="@string/cancel"
+                android:focusable="true"
+                android:padding="8dp"
+                android:src="@drawable/ic_arrow_back"
+                app:tint="@color/text_primary" />
+
+            <TextView
+                android:id="@+id/headerTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:fontFamily="sans-serif-medium"
+                android:text="@string/enter_manually"
+                android:textColor="@color/text_primary"
+                android:textSize="20sp" />
+
+        </LinearLayout>
 
         <!-- Tunnel Name -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/nameContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="8dp"
+            app:errorEnabled="true"
             app:boxBackgroundMode="outline"
             app:boxBackgroundColor="@color/bg_card"
             app:boxCornerRadiusBottomEnd="18dp"
@@ -157,6 +192,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
+            app:errorEnabled="true"
             app:boxBackgroundMode="outline"
             app:boxBackgroundColor="@color/bg_card"
             app:boxCornerRadiusBottomEnd="18dp"
@@ -192,9 +228,11 @@
             android:visibility="gone">
 
             <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/maxTokenContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
+                app:errorEnabled="true"
                 app:boxBackgroundMode="outline"
                 app:boxBackgroundColor="@color/bg_card"
                 app:boxCornerRadiusBottomEnd="18dp"
@@ -223,9 +261,11 @@
             </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/maxUserIdContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
+                app:errorEnabled="true"
                 app:boxBackgroundMode="outline"
                 app:boxBackgroundColor="@color/bg_card"
                 app:boxCornerRadiusBottomEnd="18dp"
@@ -260,6 +300,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
+            app:errorEnabled="true"
             app:boxBackgroundMode="outline"
             app:boxBackgroundColor="@color/bg_card"
             app:boxCornerRadiusBottomEnd="18dp"

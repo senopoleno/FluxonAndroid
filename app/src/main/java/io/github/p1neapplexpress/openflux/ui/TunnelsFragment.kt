@@ -218,6 +218,11 @@ class TunnelsFragment : BaseFragment() {
             showConfigDropdown(it)
         }
 
+        configDot.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            vm.checkSelectedHealth()
+        }
+
         val themePrefs = ThemePreferences(requireContext())
         view.findViewById<View>(R.id.btnThemeToggle)?.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -251,6 +256,11 @@ class TunnelsFragment : BaseFragment() {
         }
 
         observe()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        vm.checkSelectedHealth()
     }
 
     private fun requestVpnAndStart() {

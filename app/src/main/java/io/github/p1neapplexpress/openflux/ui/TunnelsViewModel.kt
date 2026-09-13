@@ -96,9 +96,21 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         refresh()
         viewModelScope.launch {
             EventBus.events.collect { event ->
-                if (event is AppEvent.SpeedUpdate) {
-                    _rxSpeed.value = event.rxSpeed
-                    _txSpeed.value = event.txSpeed
+                when (event) {
+                    is AppEvent.SpeedUpdate -> {
+                        _rxSpeed.value = event.rxSpeed
+                        _txSpeed.value = event.txSpeed
+                    }
+                    is AppEvent.TransportDisconnected -> {
+                        if (_active.value.isActive) {
+                            Logx.e(TAG, "Transport disconnected event received")
+                            _active.value = TunnelState.Error("Transport disconnected")
+                            _tunnelHealth.value = TunnelHealth.UNAVAILABLE
+                            stopUptimeCounter()
+                            refresh()
+                        }
+                    }
+                    else -> {}
                 }
             }
         }
@@ -223,8 +235,8 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
 
             if (vpnReady) {
                 _active.value = TunnelState.Running(tunnel)
-                _tunnelHealth.value = TunnelHealth.AVAILABLE
                 startUptimeCounter()
+                checkTunnelHealth(tunnel)
             } else {
                 Logx.e(TAG, "tun2socks did not start")
                 _active.value = TunnelState.Error("tun2socks did not start")
@@ -274,53 +286,129 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         checkTunnelHealth(tunnel)
     }
 
+    fun checkSelectedHealth() {
+        val running = (_active.value as? TunnelState.Running)?.tunnel
+        val target = running ?: _selected.value ?: repo.getSelected()
+        checkTunnelHealth(target)
+    }
+
     fun checkTunnelHealth(tunnel: Tunnel?) {
         healthCheckJob?.cancel()
         if (tunnel == null) {
             _tunnelHealth.value = TunnelHealth.UNKNOWN
             return
         }
-        if (_active.value is TunnelState.Running && _active.value.tunnel?.id == tunnel.id) {
-            _tunnelHealth.value = TunnelHealth.AVAILABLE
-            return
-        }
         _tunnelHealth.value = TunnelHealth.CHECKING
         healthCheckJob = viewModelScope.launch(Dispatchers.IO) {
-            val isAvailable = probeTunnel(tunnel)
+            val isAvailable = if (_active.value is TunnelState.Running && _active.value.tunnel?.id == tunnel.id) {
+                probeRunningTunnel(tunnel)
+            } else {
+                probeTunnel(tunnel)
+            }
             _tunnelHealth.value = if (isAvailable) TunnelHealth.AVAILABLE else TunnelHealth.UNAVAILABLE
         }
     }
 
-    private fun probeTunnel(tunnel: Tunnel): Boolean {
-        return try {
-            val urlStr = argValue(tunnel.transportConnPayload, "--url")
-            if (urlStr.startsWith("http://") || urlStr.startsWith("https://")) {
-                val url = java.net.URL(urlStr)
-                val conn = url.openConnection() as java.net.HttpURLConnection
+    private suspend fun probeRunningTunnel(tunnel: Tunnel): Boolean {
+        if (service?.isFServiceRunning() != true || service?.isVpnRunning() != true) {
+            return false
+        }
+        return probeLiveConnectivity()
+    }
+
+    private fun probeLiveConnectivity(): Boolean {
+        val endpoints = listOf(
+            "http://connectivitycheck.gstatic.com/generate_204",
+            "http://cp.cloudflare.com/generate_204"
+        )
+        for (ep in endpoints) {
+            try {
+                val conn = java.net.URL(ep).openConnection() as java.net.HttpURLConnection
                 conn.connectTimeout = 3000
                 conn.readTimeout = 3000
-                conn.requestMethod = "HEAD"
+                conn.instanceFollowRedirects = false
+                try {
+                    val code = conn.responseCode
+                    if (code in 200..399 || code == 204) {
+                        return true
+                    }
+                } finally {
+                    conn.disconnect()
+                }
+            } catch (_: Exception) {
+            }
+        }
+        return false
+    }
+
+    private fun probeTunnel(tunnel: Tunnel): Boolean {
+        return try {
+            val transportType = tunnel.transportType.lowercase()
+            if (transportType == "max" || transportType == "oneme") {
+                val token = argValue(tunnel.transportConnPayload, "--maxToken")
+                val uid = argValue(tunnel.transportConnPayload, "--maxUid")
+                if (token.isBlank() || uid.isBlank() || uid.toLongOrNull() == null) {
+                    return false
+                }
+                java.net.Socket().use { socket ->
+                    socket.connect(java.net.InetSocketAddress("ws-api.oneme.ru", 443), 3500)
+                    socket.isConnected
+                }
+            } else {
+                val urlStr = argValue(tunnel.transportConnPayload, "--url")
+                if (!urlStr.startsWith("http://", ignoreCase = true) && !urlStr.startsWith("https://", ignoreCase = true)) {
+                    return false
+                }
+                val conn = java.net.URL(urlStr).openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 4000
+                conn.readTimeout = 4000
+                conn.requestMethod = "GET"
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                conn.setRequestProperty("Accept-Language", "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7")
                 conn.instanceFollowRedirects = true
+
                 val code = try {
                     conn.responseCode
                 } catch (_: Exception) {
                     -1
+                }
+
+                if (code !in 200..399) {
+                    conn.disconnect()
+                    return false
+                }
+
+                val finalHost = conn.url.host.lowercase()
+                if (finalHost.contains("passport.yandex")) {
+                    conn.disconnect()
+                    return false
+                }
+
+                val bodySample = try {
+                    conn.inputStream.bufferedReader().use { r ->
+                        val buffer = CharArray(16384)
+                        val read = r.read(buffer)
+                        if (read > 0) String(buffer, 0, read) else ""
+                    }
+                } catch (_: Exception) {
+                    ""
                 } finally {
                     conn.disconnect()
                 }
-                if (code in 200..499) {
-                    true
-                } else if (code == -1) {
-                    val port = if (url.port != -1) url.port else (if (url.protocol == "https") 443 else 80)
-                    java.net.Socket().use { socket ->
-                        socket.connect(java.net.InetSocketAddress(url.host, port), 3000)
-                        socket.isConnected
+
+                if (urlStr.contains("docs.yandex") || urlStr.contains("disk.yandex") || urlStr.contains("yadi.sk")) {
+                    val lower = bodySample.lowercase()
+                    if (lower.contains("client-config") || lower.contains("officeactiondata") || lower.contains("publicresource") || lower.contains("docid") || lower.contains("editor_config")) {
+                        true
+                    } else if (lower.contains("nothing found") || lower.contains("ничего не найдено") || lower.contains("error-content") || lower.contains("not-found")) {
+                        false
+                    } else {
+                        code in 200..399
                     }
                 } else {
-                    false
+                    code in 200..399
                 }
-            } else {
-                true
             }
         } catch (_: Exception) {
             false
@@ -370,8 +458,17 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         _uptimeSeconds.value = 0L
         uptimeJob = viewModelScope.launch {
             val startedAt = System.currentTimeMillis()
+            var ticks = 0
             while (isActive) {
                 _uptimeSeconds.value = (System.currentTimeMillis() - startedAt) / 1000L
+                ticks++
+                if (ticks % 10 == 0) {
+                    val currentTunnel = (_active.value as? TunnelState.Running)?.tunnel
+                    if (currentTunnel != null) {
+                        val isAlive = probeRunningTunnel(currentTunnel)
+                        _tunnelHealth.value = if (isAlive) TunnelHealth.AVAILABLE else TunnelHealth.UNAVAILABLE
+                    }
+                }
                 delay(1_000L)
             }
         }
