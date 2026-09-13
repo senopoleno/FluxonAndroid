@@ -28,8 +28,9 @@ import java.io.FileOutputStream
 object QrShareDialog {
 
     fun show(context: Context, tunnel: Tunnel) {
-        val json = runCatching { Json.encodeToString(tunnel) }.getOrNull() ?: return
-        val configLink = TunnelLinkParser.toLink(tunnel)
+        val exportTunnel = TunnelLinkParser.prepareForExport(context, tunnel)
+        val json = runCatching { Json.encodeToString(exportTunnel) }.getOrNull() ?: return
+        val configLink = TunnelLinkParser.toLink(exportTunnel, context)
         val qrBitmap = QrGenerator.generateQrBitmap(configLink, 600) ?: run {
             Toast.makeText(context, "Не удалось сгенерировать QR-код", Toast.LENGTH_SHORT).show()
             return

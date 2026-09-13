@@ -70,8 +70,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleDeepLink(intent: Intent) {
         val uri = intent.data ?: return
-        if (!uri.scheme.equals("openflux", ignoreCase = true)) return
-        val tunnel = TunnelLinkParser.fromUri(uri) ?: return
+        if (!uri.scheme.equals("openflux", ignoreCase = true) && !uri.scheme.equals("fluxon", ignoreCase = true)) return
+        val tunnel = TunnelLinkParser.fromUri(uri, this) ?: return
 
         com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
             .setTitle(R.string.import_confirm_title)

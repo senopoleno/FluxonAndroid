@@ -8,4 +8,5 @@ data class Tunnel(
     val name: String,
     val transportType: String,
     val transportConnPayload: List<String>,
+    val encryptionKey: String? = null,
 )

@@ -91,14 +91,19 @@ class AddTunFragment : BaseFragment() {
                 }
             }
 
-            val keyPath = argValue(t.transportConnPayload, "--encryption-key-file")
-            if (keyPath.isNotEmpty()) {
-                try {
-                    val kf = File(keyPath)
-                    if (kf.exists()) {
-                        encryptionKey.setText(kf.readText().trim())
-                    }
-                } catch (_: Exception) {}
+            val keyFromProp = t.encryptionKey?.trim()
+            if (!keyFromProp.isNullOrEmpty()) {
+                encryptionKey.setText(keyFromProp)
+            } else {
+                val keyPath = argValue(t.transportConnPayload, "--encryption-key-file")
+                if (keyPath.isNotEmpty()) {
+                    try {
+                        val kf = File(keyPath)
+                        if (kf.exists()) {
+                            encryptionKey.setText(kf.readText().trim())
+                        }
+                    } catch (_: Exception) {}
+                }
             }
 
             debug = t.transportConnPayload.contains("--debug")
@@ -234,6 +239,7 @@ class AddTunFragment : BaseFragment() {
             name = name,
             transportType = transport.name,
             transportConnPayload = payload,
+            encryptionKey = encKey.trim().ifEmpty { null },
         )
     }
 

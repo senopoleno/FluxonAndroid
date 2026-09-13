@@ -19,8 +19,10 @@ import io.github.p1neapplexpress.openflux.event.AppEvent
 import io.github.p1neapplexpress.openflux.event.EventBus
 import io.github.p1neapplexpress.openflux.service.SocksVpnService
 import io.github.p1neapplexpress.openflux.util.Logx
+import io.github.p1neapplexpress.openflux.util.TunnelLinkParser
 import io.github.p1neapplexpress.openflux.vpn.VPNConfig
 import io.github.p1neapplexpress.openflux.vpn.VpnIntentFactory
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -118,6 +120,7 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         _active.value = TunnelState.Connecting(tunnel)
 
         val ctx = getApplication<Application>()
+        val prepared = TunnelLinkParser.ensureLocalKeyFile(ctx, tunnel)
         val splitPrefs = io.github.p1neapplexpress.openflux.util.SplitTunnelPreferences(ctx)
         val appBypass = splitPrefs.mode == io.github.p1neapplexpress.openflux.util.SplitTunnelPreferences.MODE_BYPASS
         val selectedApps = if (appBypass) splitPrefs.bypassApps else splitPrefs.proxyApps
@@ -125,7 +128,7 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         val appList = selectedApps.toTypedArray()
 
         val cfg = VPNConfig(
-            name = tunnel.name,
+            name = prepared.name,
             perApp = perApp,
             appBypass = appBypass,
             appList = appList,
@@ -144,7 +147,7 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
             Context.BIND_AUTO_CREATE,
         )
 
-        activeTunnelData = tunnel
+        activeTunnelData = prepared
 
         CoroutineScope(Dispatchers.IO).launch {
             var attempts = 0
@@ -160,11 +163,11 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
             }
             Logx.i(TAG, "service bound, starting transport")
 
-            _active.value = TunnelState.StartingTransport(tunnel)
+            _active.value = TunnelState.StartingTransport(prepared)
             try {
                 service?.startOpenFluxNative(
-                    tunnel.transportType,
-                    tunnel.transportConnPayload.toTypedArray()
+                    prepared.transportType,
+                    prepared.transportConnPayload.toTypedArray()
                 )
             } catch (e: Exception) {
                 Logx.e(TAG, "startOpenFluxNative failed", e)
@@ -331,11 +334,15 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun addTunnel(tunnel: Tunnel) {
         val current = repo.load().toMutableList()
-        if (current.none { it.id == tunnel.id }) {
-            current.add(tunnel)
-            repo.save(current)
-            refresh()
+        val uniqueTunnel = if (current.any { it.id == tunnel.id }) {
+            tunnel.copy(id = System.currentTimeMillis())
+        } else {
+            tunnel
         }
+        val prepared = TunnelLinkParser.ensureLocalKeyFile(getApplication(), uniqueTunnel)
+        current.add(prepared)
+        repo.save(current)
+        refresh()
     }
 
     fun removeTunnel(tunnel: Tunnel) {
@@ -343,6 +350,7 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         val current = repo.load().toMutableList()
         current.removeAll { it.id == tunnel.id }
         repo.save(current)
+        runCatching { File(getApplication<Application>().filesDir, "key_${tunnel.id}.txt").delete() }
         refresh()
     }
 
@@ -351,7 +359,8 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         val idx = current.indexOfFirst { it.id == old.id }
         if (idx < 0) return
         if (_active.value.tunnel == old) stop()
-        current[idx] = new
+        val prepared = TunnelLinkParser.ensureLocalKeyFile(getApplication(), new)
+        current[idx] = prepared
         repo.save(current)
         refresh()
     }

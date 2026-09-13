@@ -88,7 +88,7 @@ class TunnelsFragment : BaseFragment() {
     private val qrScanner = registerForActivityResult(ScanQRCode()) { result ->
         val raw = (result as? QRResult.QRSuccess)?.content?.rawValue
             ?: return@registerForActivityResult
-        val tunnel = TunnelLinkParser.parse(raw)
+        val tunnel = TunnelLinkParser.parse(raw, requireContext())
         if (tunnel != null) {
             vm.addTunnel(tunnel)
             vm.startTunnel(tunnel)
@@ -103,7 +103,7 @@ class TunnelsFragment : BaseFragment() {
         viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
             val decoded = QrDecoder.decodeFromUri(requireContext(), uri)
             withContext(Dispatchers.Main) {
-                val tunnel = if (decoded != null) TunnelLinkParser.parse(decoded) else null
+                val tunnel = if (decoded != null) TunnelLinkParser.parse(decoded, requireContext()) else null
                 if (tunnel != null) {
                     vm.addTunnel(tunnel)
                     vm.startTunnel(tunnel)
@@ -170,7 +170,7 @@ class TunnelsFragment : BaseFragment() {
             .setView(inputLayout)
             .setPositiveButton(R.string.import_link_dialog_btn) { _, _ ->
                 val text = editText.text?.toString()?.trim()
-                val tunnel = TunnelLinkParser.parse(text)
+                val tunnel = TunnelLinkParser.parse(text, context)
                 if (tunnel != null) {
                     vm.addTunnel(tunnel)
                     vm.startTunnel(tunnel)
