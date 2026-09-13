@@ -56,13 +56,12 @@ class TunAdapter : RecyclerView.Adapter<TunAdapter.VH>() {
             name.text = item.tunnel.name
             name.alpha = if (isActive) 1f else 0.6f
 
-            toggle.setOnCheckedChangeListener(null)
-            toggle.isChecked = isActive
-            toggle.setOnCheckedChangeListener { v, checked ->
+            if (toggle.isChecked != isActive) {
+                toggle.setOnCheckedChangeListener(null)
+                toggle.isChecked = isActive
+            }
+            toggle.setOnCheckedChangeListener { _, checked ->
                 EventBus.dispatch(AppEvent.ToggleTunnel(item.tunnel.id, checked))
-                v.animate().scaleX(0.97f).scaleY(0.97f).setDuration(100).withEndAction {
-                    v.animate().scaleX(1f).scaleY(1f).setDuration(100).start()
-                }.start()
             }
 
             if (isActive) {

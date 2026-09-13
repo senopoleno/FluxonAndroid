@@ -5,6 +5,7 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:background="@drawable/bg_menu_popup"
+    android:clipToOutline="true"
     android:paddingVertical="6dp"
     android:minWidth="180dp">
 

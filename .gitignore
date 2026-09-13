@@ -106,4 +106,7 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 *.lnk
+*.bak
+Fluxon_*_backup*
+Fluxon.apk
 EOF

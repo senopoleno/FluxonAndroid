@@ -64,8 +64,14 @@ object AppUpdateChecker {
         val lastCheck = prefs.getLong(KEY_LAST_CHECK_MS, 0L)
         val now = System.currentTimeMillis()
 
-        if (!force && (now - lastCheck) < CHECK_INTERVAL_MS) {
-            return
+        if (!force) {
+            val appSettings = AppSettings(activity)
+            if (!appSettings.autoUpdateCheck) {
+                return
+            }
+            if ((now - lastCheck) < CHECK_INTERVAL_MS) {
+                return
+            }
         }
 
         CoroutineScope(Dispatchers.IO).launch {

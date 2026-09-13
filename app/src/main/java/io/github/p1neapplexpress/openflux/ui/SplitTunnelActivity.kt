@@ -1,374 +1,1283 @@
 package io.github.p1neapplexpress.openflux.ui
 
 import android.content.Context
+
 import android.content.Intent
+
 import android.content.pm.ApplicationInfo
+
 import android.content.pm.PackageManager
+
 import android.content.pm.ResolveInfo
+
 import android.os.Bundle
+
 import android.view.HapticFeedbackConstants
+
+import android.view.LayoutInflater
+
 import android.view.View
+
+import android.view.ViewGroup
+
+import android.view.inputmethod.EditorInfo
+
 import android.view.inputmethod.InputMethodManager
+
+import android.widget.CheckBox
+
 import android.widget.EditText
+
 import android.widget.ImageView
+
 import android.widget.ProgressBar
+
 import android.widget.TextView
+
+import android.widget.Toast
+
 import androidx.activity.OnBackPressedCallback
+
 import androidx.appcompat.app.AppCompatActivity
+
 import androidx.core.view.WindowCompat
+
 import androidx.core.view.isVisible
+
 import androidx.core.widget.doAfterTextChanged
+
 import androidx.lifecycle.lifecycleScope
+
 import androidx.recyclerview.widget.LinearLayoutManager
+
 import androidx.recyclerview.widget.RecyclerView
+
+import com.google.android.material.bottomsheet.BottomSheetDialog
+
 import com.google.android.material.button.MaterialButton
+
 import com.google.android.material.button.MaterialButtonToggleGroup
+
+import com.google.android.material.materialswitch.MaterialSwitch
+
+import com.google.android.material.textfield.TextInputEditText
+
+import com.google.android.material.textfield.TextInputLayout
+
 import io.github.p1neapplexpress.openflux.R
+
 import io.github.p1neapplexpress.openflux.data.AppItem
+
+import io.github.p1neapplexpress.openflux.util.DomainRulesPreferences
+
 import io.github.p1neapplexpress.openflux.util.RussianAppsPreset
+
 import io.github.p1neapplexpress.openflux.util.SplitTunnelPreferences
+
 import io.github.p1neapplexpress.openflux.util.ThemePreferences
+
 import kotlinx.coroutines.Dispatchers
+
 import kotlinx.coroutines.launch
+
 import kotlinx.coroutines.withContext
 
 class SplitTunnelActivity : AppCompatActivity() {
 
-    private lateinit var prefs: SplitTunnelPreferences
-    private lateinit var adapter: AppsAdapter
+    companion object {
+
+        private const val SECTION_APPS = 0
+
+        private const val SECTION_SITES = 1
+
+    }
+
+    private var activeSection = SECTION_APPS
+
+    // App Preferences & Data
+
+    private lateinit var appPrefs: SplitTunnelPreferences
+
+    private lateinit var appsAdapter: AppsAdapter
+
     private val allApps: MutableList<AppItem> = mutableListOf()
 
+    // Domain Preferences & Data
+
+    private lateinit var domainPrefs: DomainRulesPreferences
+
+    private lateinit var domainsAdapter: DomainsAdapter
+
+    private val allDomains: MutableList<String> = mutableListOf()
+
+    // Common Views
+
     private lateinit var btnBack: ImageView
+
     private lateinit var titleContainer: View
+
     private lateinit var searchBarContainer: View
+
     private lateinit var btnSearchToggle: ImageView
-    private lateinit var toggleGroup: MaterialButtonToggleGroup
-    private lateinit var btnTabBypass: MaterialButton
-    private lateinit var btnTabProxy: MaterialButton
-    private lateinit var modeDescription: TextView
-    private lateinit var selectedCountText: TextView
-    private lateinit var btnSelectAll: TextView
-    private lateinit var btnResetDefaults: TextView
+
     private lateinit var searchInput: EditText
+
     private lateinit var btnClearSearch: ImageView
-    private lateinit var loadingProgress: ProgressBar
-    private lateinit var emptyState: View
-    private lateinit var recycler: RecyclerView
+
+    private lateinit var sectionToggleGroup: MaterialButtonToggleGroup
+
+    private lateinit var btnSectionApps: MaterialButton
+
+    private lateinit var btnSectionSites: MaterialButton
+
+    // Apps Section Views
+
+    private lateinit var containerAppsSection: View
+
+    private lateinit var appToggleGroup: MaterialButtonToggleGroup
+
+    private lateinit var btnAppTabBypass: MaterialButton
+
+    private lateinit var btnAppTabProxy: MaterialButton
+
+    private lateinit var appModeDescription: TextView
+
+    private lateinit var appSelectedCountText: TextView
+
+    private lateinit var switchHideSystem: MaterialSwitch
+
+    private lateinit var btnAppSelectAll: MaterialButton
+
+    private lateinit var btnAppResetDefaults: MaterialButton
+
+    private lateinit var appLoadingProgress: ProgressBar
+
+    private lateinit var appEmptyState: View
+
+    private lateinit var appsRecycler: RecyclerView
+
+    // Sites Section Views
+
+    private lateinit var containerSitesSection: View
+
+    private lateinit var sitesToggleGroup: MaterialButtonToggleGroup
+
+    private lateinit var btnSitesTabBypass: MaterialButton
+
+    private lateinit var btnSitesTabProxy: MaterialButton
+
+    private lateinit var sitesModeDescription: TextView
+
+    private lateinit var sitesCountText: TextView
+
+    private lateinit var btnAddSite: MaterialButton
+
+    private lateinit var btnSitePresets: MaterialButton
+
+    private lateinit var btnClearSites: MaterialButton
+
+    private lateinit var sitesEmptyState: View
+
+    private lateinit var sitesRecycler: RecyclerView
 
     override fun onCreate(savedInstanceState: Bundle?) {
+
         val themePrefs = ThemePreferences(this)
+
         themePrefs.applyTheme()
+
         super.onCreate(savedInstanceState)
 
         val isNight = when (themePrefs.themeMode) {
+
             ThemePreferences.THEME_LIGHT -> false
+
             ThemePreferences.THEME_DARK -> true
+
             else -> (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+
         }
+
         val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+
         insetsController.isAppearanceLightStatusBars = !isNight
+
         insetsController.isAppearanceLightNavigationBars = !isNight
 
         setContentView(R.layout.activity_split_tunnel)
 
-        prefs = SplitTunnelPreferences(this)
+        appPrefs = SplitTunnelPreferences(this)
+
+        domainPrefs = DomainRulesPreferences(this)
 
         initViews()
+
         setupListeners()
+
         loadInstalledApps()
 
+        loadDomains()
+
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+
             override fun handleOnBackPressed() {
+
                 if (searchBarContainer.isVisible) {
+
                     closeSearch()
+
                 } else {
+
                     isEnabled = false
+
                     onBackPressedDispatcher.onBackPressed()
+
                 }
+
             }
+
         })
+
     }
 
     private fun initViews() {
+
         btnBack = findViewById(R.id.btn_back)
-        btnBack.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            if (searchBarContainer.isVisible) {
-                closeSearch()
-            } else {
-                finish()
-            }
-        }
 
         titleContainer = findViewById(R.id.title_container)
+
         searchBarContainer = findViewById(R.id.search_bar_container)
+
         btnSearchToggle = findViewById(R.id.btn_search_toggle)
-        btnSearchToggle.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            openSearch()
-        }
 
-        toggleGroup = findViewById(R.id.mode_toggle_group)
-        btnTabBypass = findViewById(R.id.btn_tab_bypass)
-        btnTabProxy = findViewById(R.id.btn_tab_proxy)
-        modeDescription = findViewById(R.id.mode_description)
-        selectedCountText = findViewById(R.id.selected_count_text)
-        btnSelectAll = findViewById(R.id.btn_select_all)
-        btnResetDefaults = findViewById(R.id.btn_reset_defaults)
         searchInput = findViewById(R.id.search_input)
+
         btnClearSearch = findViewById(R.id.btn_clear_search)
-        loadingProgress = findViewById(R.id.loading_progress)
-        emptyState = findViewById(R.id.empty_state)
-        recycler = findViewById(R.id.apps_recycler)
 
-        adapter = AppsAdapter { item ->
-            val set = if (prefs.mode == SplitTunnelPreferences.MODE_BYPASS) {
-                prefs.bypassApps.toMutableSet().apply {
-                    if (item.isSelected) add(item.packageName) else remove(item.packageName)
-                }
-            } else {
-                prefs.proxyApps.toMutableSet().apply {
-                    if (item.isSelected) add(item.packageName) else remove(item.packageName)
-                }
-            }
+        sectionToggleGroup = findViewById(R.id.section_toggle_group)
 
-            if (prefs.mode == SplitTunnelPreferences.MODE_BYPASS) {
-                prefs.bypassApps = set
-            } else {
-                prefs.proxyApps = set
-            }
-            updateCounter()
-            updateSelectAllButtonText()
+        btnSectionApps = findViewById(R.id.btn_section_apps)
+
+        btnSectionSites = findViewById(R.id.btn_section_sites)
+
+        // Apps views
+
+        containerAppsSection = findViewById(R.id.container_apps_section)
+
+        appToggleGroup = findViewById(R.id.mode_toggle_group)
+
+        btnAppTabBypass = findViewById(R.id.btn_tab_bypass)
+
+        btnAppTabProxy = findViewById(R.id.btn_tab_proxy)
+
+        appModeDescription = findViewById(R.id.mode_description)
+
+        appSelectedCountText = findViewById(R.id.selected_count_text)
+
+        switchHideSystem = findViewById(R.id.switch_hide_system)
+
+        btnAppSelectAll = findViewById(R.id.btn_select_all)
+
+        btnAppResetDefaults = findViewById(R.id.btn_reset_defaults)
+
+        appLoadingProgress = findViewById(R.id.loading_progress)
+
+        appEmptyState = findViewById(R.id.empty_state)
+
+        appsRecycler = findViewById(R.id.apps_recycler)
+
+        // Sites views
+
+        containerSitesSection = findViewById(R.id.container_sites_section)
+
+        sitesToggleGroup = findViewById(R.id.sites_mode_toggle_group)
+
+        btnSitesTabBypass = findViewById(R.id.btn_sites_tab_bypass)
+
+        btnSitesTabProxy = findViewById(R.id.btn_sites_tab_proxy)
+
+        sitesModeDescription = findViewById(R.id.sites_mode_description)
+
+        sitesCountText = findViewById(R.id.sites_count_text)
+
+        btnAddSite = findViewById(R.id.btn_add_site)
+
+        btnSitePresets = findViewById(R.id.btn_site_presets)
+
+        btnClearSites = findViewById(R.id.btn_clear_sites)
+
+        sitesEmptyState = findViewById(R.id.sites_empty_state)
+
+        sitesRecycler = findViewById(R.id.sites_recycler)
+
+        appsRecycler.layoutManager = LinearLayoutManager(this)
+
+        appsAdapter = AppsAdapter { app, isSelected ->
+
+            onAppToggled(app, isSelected)
+
         }
 
-        adapter.onListFiltered = { count ->
-            emptyState.isVisible = count == 0 && loadingProgress.visibility != View.VISIBLE
-            recycler.isVisible = count > 0
-            updateSelectAllButtonText()
+        appsRecycler.adapter = appsAdapter
+
+        sitesRecycler.layoutManager = LinearLayoutManager(this)
+
+        domainsAdapter = DomainsAdapter { domain ->
+
+            deleteDomain(domain)
+
         }
 
-        recycler.layoutManager = LinearLayoutManager(this)
-        recycler.adapter = adapter
+        sitesRecycler.adapter = domainsAdapter
 
-        if (prefs.mode == SplitTunnelPreferences.MODE_PROXY) {
-            toggleGroup.check(R.id.btn_tab_proxy)
-        } else {
-            toggleGroup.check(R.id.btn_tab_bypass)
-        }
-        updateModeUi()
-    }
-
-    private fun openSearch() {
-        titleContainer.isVisible = false
-        searchBarContainer.isVisible = true
-        searchInput.requestFocus()
-        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-        imm?.showSoftInput(searchInput, InputMethodManager.SHOW_IMPLICIT)
-    }
-
-    private fun closeSearch() {
-        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-        imm?.hideSoftInputFromWindow(searchInput.windowToken, 0)
-        searchInput.setText("")
-        searchBarContainer.isVisible = false
-        titleContainer.isVisible = true
     }
 
     private fun setupListeners() {
-        toggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
-            if (isChecked) {
-                toggleGroup.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                when (checkedId) {
-                    R.id.btn_tab_bypass -> prefs.mode = SplitTunnelPreferences.MODE_BYPASS
-                    R.id.btn_tab_proxy -> prefs.mode = SplitTunnelPreferences.MODE_PROXY
-                }
-                updateModeUi()
-                refreshAppSelections()
+
+        btnBack.setOnClickListener {
+
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+
+            if (searchBarContainer.isVisible) {
+
+                closeSearch()
+
+            } else {
+
+                finish()
+
             }
+
         }
 
-        searchInput.doAfterTextChanged { text ->
-            val q = text?.toString() ?: ""
-            btnClearSearch.isVisible = q.isNotEmpty()
-            adapter.filter(q)
+        // Section Switcher: Apps vs Sites
+
+        sectionToggleGroup.check(R.id.btn_section_apps)
+
+        sectionToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+
+            if (isChecked) {
+
+                activeSection = if (checkedId == R.id.btn_section_apps) SECTION_APPS else SECTION_SITES
+
+                containerAppsSection.isVisible = (activeSection == SECTION_APPS)
+
+                containerSitesSection.isVisible = (activeSection == SECTION_SITES)
+
+                applySearchFilter(searchInput.text?.toString().orEmpty())
+
+            }
+
+        }
+
+        // Apps Mode Toggle (Bypass vs Proxy)
+
+        val isAppBypass = appPrefs.mode == SplitTunnelPreferences.MODE_BYPASS
+
+        appToggleGroup.check(if (isAppBypass) R.id.btn_tab_bypass else R.id.btn_tab_proxy)
+
+        updateAppModeDescription(isAppBypass)
+
+        appToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+
+            if (isChecked) {
+
+                val bypass = checkedId == R.id.btn_tab_bypass
+
+                appPrefs.mode = if (bypass) SplitTunnelPreferences.MODE_BYPASS else SplitTunnelPreferences.MODE_PROXY
+
+                updateAppModeDescription(bypass)
+
+                syncAppSelectionsWithPrefs()
+
+            }
+
+        }
+
+        // Hide System Apps Switch
+
+        switchHideSystem.isChecked = appPrefs.hideSystemApps
+        switchHideSystem.jumpDrawablesToCurrentState()
+
+        switchHideSystem.setOnCheckedChangeListener { _, isChecked ->
+
+            appPrefs.hideSystemApps = isChecked
+
+            applySearchFilter(searchInput.text?.toString().orEmpty())
+
+        }
+
+        btnAppSelectAll.setOnClickListener {
+
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+
+            toggleSelectAllApps()
+
+        }
+
+        btnAppResetDefaults.setOnClickListener {
+
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+
+            resetAppDefaults()
+
+        }
+
+        // Sites Mode Toggle (Bypass vs Proxy)
+
+        val isSiteBypass = domainPrefs.mode == DomainRulesPreferences.MODE_BYPASS
+
+        sitesToggleGroup.check(if (isSiteBypass) R.id.btn_sites_tab_bypass else R.id.btn_sites_tab_proxy)
+
+        updateSitesModeDescription(isSiteBypass)
+
+        sitesToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+
+            if (isChecked) {
+
+                val bypass = checkedId == R.id.btn_sites_tab_bypass
+
+                domainPrefs.mode = if (bypass) DomainRulesPreferences.MODE_BYPASS else DomainRulesPreferences.MODE_PROXY
+
+                updateSitesModeDescription(bypass)
+
+            }
+
+        }
+
+        btnAddSite.setOnClickListener {
+
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+
+            showAddSiteBottomSheet()
+
+        }
+
+        btnSitePresets.setOnClickListener {
+
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+
+            showPresetsBottomSheet()
+
+        }
+
+        btnClearSites.setOnClickListener {
+
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+
+            confirmClearSites()
+
+        }
+
+        // Search Bar listeners
+
+        btnSearchToggle.setOnClickListener {
+
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+
+            openSearch()
+
         }
 
         btnClearSearch.setOnClickListener {
+
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            searchInput.setText("")
-        }
 
-        btnSelectAll.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            val displayed = adapter.getDisplayedApps()
-            val anyUnselected = displayed.any { !it.isSelected }
-            val newSelectedState = anyUnselected
+            if (searchInput.text.isNullOrEmpty()) {
 
-            val set = if (prefs.mode == SplitTunnelPreferences.MODE_BYPASS) {
-                prefs.bypassApps.toMutableSet()
+                closeSearch()
+
             } else {
-                prefs.proxyApps.toMutableSet()
+
+                searchInput.setText("")
+
             }
 
-            for (app in displayed) {
-                app.isSelected = newSelectedState
-                if (newSelectedState) {
-                    set.add(app.packageName)
-                } else {
-                    set.remove(app.packageName)
-                }
-            }
-
-            if (prefs.mode == SplitTunnelPreferences.MODE_BYPASS) {
-                prefs.bypassApps = set
-            } else {
-                prefs.proxyApps = set
-            }
-
-            adapter.notifyDataSetChanged()
-            updateCounter()
-            updateSelectAllButtonText()
         }
 
-        btnResetDefaults.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            val installedPkgSet = allApps.map { it.packageName }.toSet()
-            if (prefs.mode == SplitTunnelPreferences.MODE_BYPASS) {
-                prefs.resetToDefaults(installedPkgSet)
-            } else {
-                prefs.proxyApps = emptySet()
-            }
-            refreshAppSelections()
+        searchInput.doAfterTextChanged { text ->
+
+            val q = text?.toString().orEmpty()
+
+            btnClearSearch.isVisible = q.isNotEmpty()
+
+            applySearchFilter(q)
+
         }
+
     }
 
-    private fun updateModeUi() {
-        if (prefs.mode == SplitTunnelPreferences.MODE_BYPASS) {
-            modeDescription.setText(R.string.tab_bypass_desc)
+    private fun updateAppModeDescription(isBypass: Boolean) {
+
+        appModeDescription.text = if (isBypass) {
+
+            getString(R.string.tab_bypass_desc)
+
         } else {
-            modeDescription.setText(R.string.tab_proxy_desc)
+
+            getString(R.string.tab_proxy_desc)
+
         }
+
     }
 
-    private fun refreshAppSelections() {
-        val selectedSet = if (prefs.mode == SplitTunnelPreferences.MODE_BYPASS) {
-            prefs.bypassApps
+    private fun updateSitesModeDescription(isBypass: Boolean) {
+
+        sitesModeDescription.text = if (isBypass) {
+
+            getString(R.string.split_sites_mode_bypass)
+
         } else {
-            prefs.proxyApps
+
+            getString(R.string.split_sites_mode_proxy)
+
         }
 
-        for (app in allApps) {
-            app.isSelected = app.packageName in selectedSet
-        }
-        allApps.sortWith(
-            compareByDescending<AppItem> { it.isSelected }
-                .thenBy { !it.isRussianPreset }
-                .thenBy { it.name.lowercase() }
-        )
-        adapter.submitList(allApps)
-        adapter.filter(searchInput.text?.toString() ?: "")
-        updateCounter()
-        updateSelectAllButtonText()
     }
 
-    private fun updateCounter() {
-        val selectedCount = allApps.count { it.isSelected }
-        val total = allApps.size
-        selectedCountText.text = getString(R.string.selected_apps_count, selectedCount, total)
-    }
-
-    private fun updateSelectAllButtonText() {
-        val displayed = adapter.getDisplayedApps()
-        if (displayed.isNotEmpty() && displayed.all { it.isSelected }) {
-            btnSelectAll.setText(R.string.deselect_all)
-        } else {
-            btnSelectAll.setText(R.string.select_all)
-        }
-    }
+    // --- Apps Split Tunneling Logic ---
 
     private fun loadInstalledApps() {
-        loadingProgress.visibility = View.VISIBLE
-        emptyState.visibility = View.GONE
-        recycler.visibility = View.GONE
+
+        appLoadingProgress.isVisible = true
+
+        appsRecycler.isVisible = false
+
+        appEmptyState.isVisible = false
 
         lifecycleScope.launch(Dispatchers.IO) {
+
             val pm = packageManager
-            val selfPkg = packageName
 
-            val launcherIntent = Intent(Intent.ACTION_MAIN, null).apply {
+            val mainIntent = Intent(Intent.ACTION_MAIN, null).apply {
+
                 addCategory(Intent.CATEGORY_LAUNCHER)
-            }
-            val launcherActivities = runCatching {
-                pm.queryIntentActivities(launcherIntent, 0)
-            }.getOrDefault(emptyList())
 
-            val launcherMap = HashMap<String, ResolveInfo>()
-            for (resolve in launcherActivities) {
-                val pkg = resolve.activityInfo.packageName
-                if (!launcherMap.containsKey(pkg)) {
-                    launcherMap[pkg] = resolve
-                }
             }
 
-            val installed = runCatching {
-                pm.getInstalledApplications(PackageManager.GET_META_DATA)
-            }.getOrDefault(emptyList())
+            val launchableList: List<ResolveInfo> = pm.queryIntentActivities(mainIntent, 0)
 
-            val allPkgSet = LinkedHashSet<String>()
-            allPkgSet.addAll(launcherMap.keys)
+            val launchablePkgs = launchableList.map { it.activityInfo.packageName }.toSet()
+
+            val installed = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+
+            val myPackage = packageName
+
+            val currentSelected = getSelectedAppPackages()
+
+            val list = mutableListOf<AppItem>()
+
             for (app in installed) {
-                allPkgSet.add(app.packageName)
-            }
-            allPkgSet.remove(selfPkg)
 
-            val appItems = allPkgSet.mapNotNull { pkg ->
-                runCatching {
-                    val launcher = launcherMap[pkg]
-                    val appInfo = installed.firstOrNull { it.packageName == pkg }
-                        ?: pm.getApplicationInfo(pkg, 0)
+                if (app.packageName == myPackage) continue
 
-                    val label = launcher?.loadLabel(pm)?.toString()
-                        ?: appInfo.loadLabel(pm).toString()
+                val isLaunchable = launchablePkgs.contains(app.packageName)
+                val isSystem = ((app.flags and ApplicationInfo.FLAG_SYSTEM) != 0) ||
+                        ((app.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0) ||
+                        !isLaunchable
 
-                    val icon = launcher?.loadIcon(pm)
-                        ?: appInfo.loadIcon(pm)
+                val label = try {
 
-                    val isSystem = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-                    val isRussian = pkg in RussianAppsPreset.PACKAGE_NAMES
+                    pm.getApplicationLabel(app).toString()
+
+                } catch (_: Exception) {
+
+                    app.packageName
+
+                }
+
+                val icon = try {
+
+                    pm.getApplicationIcon(app)
+
+                } catch (_: Exception) {
+
+                    null
+
+                }
+
+                val selected = currentSelected.contains(app.packageName)
+
+                list.add(
 
                     AppItem(
+
                         name = label,
-                        packageName = pkg,
+
+                        packageName = app.packageName,
+
                         icon = icon,
-                        isSelected = false,
-                        isSystem = isSystem,
-                        isRussianPreset = isRussian
+
+                        isSelected = selected,
+
+                        isSystem = isSystem
+
                     )
-                }.getOrNull()
-            }.sortedWith(
-                compareBy<AppItem> { item ->
-                    when {
-                        item.isRussianPreset -> 0
-                        !item.isSystem -> 0
-                        launcherMap.containsKey(item.packageName) -> 1
-                        else -> 2
-                    }
-                }.thenBy { it.name.lowercase() }
+
+                )
+
+            }
+
+            list.sortWith(
+                compareByDescending<AppItem> { it.isSelected }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
             )
 
             withContext(Dispatchers.Main) {
+
                 allApps.clear()
-                allApps.addAll(appItems)
 
-                if (!prefs.isInitialized()) {
-                    val pkgSet = allApps.map { it.packageName }.toSet()
-                    prefs.initializeDefaults(pkgSet)
-                }
+                allApps.addAll(list)
 
-                refreshAppSelections()
-                loadingProgress.visibility = View.GONE
-                recycler.visibility = View.VISIBLE
+                appLoadingProgress.isVisible = false
+
+                appsRecycler.isVisible = true
+
+                applySearchFilter(searchInput.text?.toString().orEmpty())
+
+                updateAppCountDisplay()
+
             }
+
         }
+
     }
+
+    private fun getSelectedAppPackages(): Set<String> {
+
+        return if (appPrefs.mode == SplitTunnelPreferences.MODE_BYPASS) {
+
+            appPrefs.bypassApps
+
+        } else {
+
+            appPrefs.proxyApps
+
+        }
+
+    }
+
+    private fun saveSelectedAppPackages(selected: Set<String>) {
+
+        if (appPrefs.mode == SplitTunnelPreferences.MODE_BYPASS) {
+
+            appPrefs.bypassApps = selected
+
+        } else {
+
+            appPrefs.proxyApps = selected
+
+        }
+
+    }
+
+    private fun onAppToggled(item: AppItem, isSelected: Boolean) {
+
+        val idx = allApps.indexOfFirst { it.packageName == item.packageName }
+
+        if (idx != -1) {
+
+            allApps[idx] = allApps[idx].copy(isSelected = isSelected)
+
+        }
+
+        val currentSet = getSelectedAppPackages().toMutableSet()
+
+        if (isSelected) {
+
+            currentSet.add(item.packageName)
+
+        } else {
+
+            currentSet.remove(item.packageName)
+
+        }
+
+        saveSelectedAppPackages(currentSet)
+
+        updateAppCountDisplay()
+
+    }
+
+    private fun toggleSelectAllApps() {
+
+        val currentlyShowing = appsAdapter.currentList
+
+        val allShowingSelected = currentlyShowing.isNotEmpty() && currentlyShowing.all { it.isSelected }
+
+        val targetState = !allShowingSelected
+
+        val activeSet = getSelectedAppPackages().toMutableSet()
+
+        for (item in currentlyShowing) {
+
+            if (targetState) {
+
+                activeSet.add(item.packageName)
+
+            } else {
+
+                activeSet.remove(item.packageName)
+
+            }
+
+        }
+
+        saveSelectedAppPackages(activeSet)
+
+        syncAppSelectionsWithPrefs()
+
+    }
+
+    private fun resetAppDefaults() {
+
+        val defaultRu = RussianAppsPreset.PACKAGE_NAMES
+
+        if (appPrefs.mode == SplitTunnelPreferences.MODE_BYPASS) {
+
+            appPrefs.bypassApps = defaultRu
+
+        } else {
+
+            appPrefs.proxyApps = emptySet()
+
+        }
+
+        syncAppSelectionsWithPrefs()
+
+        Toast.makeText(this, R.string.reset_defaults, Toast.LENGTH_SHORT).show()
+
+    }
+
+    private fun syncAppSelectionsWithPrefs() {
+        val selected = getSelectedAppPackages()
+        for (i in allApps.indices) {
+            val app = allApps[i]
+            allApps[i] = app.copy(isSelected = selected.contains(app.packageName))
+        }
+        allApps.sortWith(
+            compareByDescending<AppItem> { it.isSelected }
+                .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+        )
+        applySearchFilter(searchInput.text?.toString().orEmpty())
+        updateAppCountDisplay()
+    }
+
+    private fun updateAppCountDisplay() {
+
+        val selectedCount = allApps.count { it.isSelected }
+
+        val totalCount = if (appPrefs.hideSystemApps) { allApps.count { !it.isSystem || it.isSelected } } else { allApps.size }
+
+        appSelectedCountText.text = getString(R.string.selected_apps_count, selectedCount, totalCount)
+
+        // Update toggle button text and icon dynamically
+
+        val currentlyShowing = appsAdapter.currentList
+
+        val allSelected = currentlyShowing.isNotEmpty() && currentlyShowing.all { it.isSelected }
+
+        if (allSelected) {
+
+            btnAppSelectAll.setText(R.string.split_deselect_all)
+
+            btnAppSelectAll.setIconResource(R.drawable.ic_clear)
+
+        } else {
+
+            btnAppSelectAll.setText(R.string.select_all)
+
+            btnAppSelectAll.setIconResource(R.drawable.ic_check)
+
+        }
+
+    }
+
+    // --- Sites Routing Logic ---
+
+    private fun loadDomains() {
+
+        allDomains.clear()
+
+        allDomains.addAll(domainPrefs.domains.sorted())
+
+        applySitesFilter(searchInput.text?.toString().orEmpty())
+
+        updateSitesCountDisplay()
+
+    }
+
+    private fun updateSitesCountDisplay() {
+
+        val count = domainPrefs.domains.size
+
+        sitesCountText.text = getString(R.string.split_sites_count, count)
+
+    }
+
+    private fun deleteDomain(domain: String) {
+
+        domainPrefs.removeDomain(domain)
+
+        loadDomains()
+
+        Toast.makeText(this, R.string.domain_deleted, Toast.LENGTH_SHORT).show()
+
+    }
+
+    private fun showAddSiteBottomSheet() {
+
+        val dialog = BottomSheetDialog(this)
+
+        val view = layoutInflater.inflate(R.layout.bottom_sheet_add_site, null)
+
+        dialog.setContentView(view)
+
+        val inputLayout = view.findViewById<TextInputLayout>(R.id.layout_domain_input)
+
+        val inputEdit = view.findViewById<TextInputEditText>(R.id.input_domain_value)
+
+        val btnCancel = view.findViewById<View>(R.id.btn_cancel_add_site)
+
+        val btnConfirm = view.findViewById<View>(R.id.btn_confirm_add_site)
+
+        btnCancel.setOnClickListener {
+
+            dialog.dismiss()
+
+        }
+
+        fun doAdd() {
+
+            val raw = inputEdit.text?.toString().orEmpty().trim()
+
+            val clean = raw.lowercase().removePrefix("https://").removePrefix("http://").trimEnd('/')
+
+            if (clean.isBlank() || clean.contains(" ") || !clean.contains(".")) {
+
+                inputLayout.error = getString(R.string.split_sites_invalid_domain)
+
+                return
+
+            }
+
+            inputLayout.error = null
+
+            val added = domainPrefs.addDomain(clean)
+
+            dialog.dismiss()
+
+            if (added) {
+
+                loadDomains()
+
+                Toast.makeText(this, R.string.domain_added, Toast.LENGTH_SHORT).show()
+
+            }
+
+        }
+
+        btnConfirm.setOnClickListener {
+
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+
+            doAdd()
+
+        }
+
+        inputEdit.setOnEditorActionListener { _, actionId, _ ->
+
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+
+                doAdd()
+
+                true
+
+            } else {
+
+                false
+
+            }
+
+        }
+
+        dialog.show()
+
+        inputEdit.requestFocus()
+
+    }
+
+    private fun showPresetsBottomSheet() {
+
+        val dialog = BottomSheetDialog(this)
+
+        val view = layoutInflater.inflate(R.layout.bottom_sheet_domain_presets, null)
+
+        dialog.setContentView(view)
+
+        fun applyPreset(preset: Set<String>, title: String) {
+
+            dialog.dismiss()
+
+            domainPrefs.addPreset(preset)
+
+            loadDomains()
+
+            Toast.makeText(
+
+                this@SplitTunnelActivity,
+
+                getString(R.string.split_sites_preset_applied, title),
+
+                Toast.LENGTH_SHORT
+
+            ).show()
+
+        }
+
+        // 1. Russian Services
+
+        view.findViewById<View>(R.id.card_preset_ru).setOnClickListener {
+
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+
+            applyPreset(DomainRulesPreferences.getPresetRu(this), getString(R.string.split_sites_preset_ru_title))
+
+        }
+
+        // 2. Blocked Resources
+
+        view.findViewById<View>(R.id.card_preset_blocked).setOnClickListener {
+
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+
+            applyPreset(DomainRulesPreferences.getPresetBlocked(this), getString(R.string.split_sites_preset_blocked_title))
+
+        }
+
+        // 3. YouTube
+
+        view.findViewById<View>(R.id.card_preset_youtube).setOnClickListener {
+
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+
+            applyPreset(DomainRulesPreferences.getPresetYoutube(this), getString(R.string.split_sites_preset_youtube_title))
+
+        }
+
+        // 4. Discord
+
+        view.findViewById<View>(R.id.card_preset_discord).setOnClickListener {
+
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+
+            applyPreset(DomainRulesPreferences.getPresetDiscord(this), getString(R.string.split_sites_preset_discord_title))
+
+        }
+
+        // 5. AI
+
+        view.findViewById<View>(R.id.card_preset_ai).setOnClickListener {
+
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+
+            applyPreset(DomainRulesPreferences.getPresetAi(this), getString(R.string.split_sites_preset_ai_title))
+
+        }
+
+        // 6. All Blocked Combo
+
+        view.findViewById<View>(R.id.card_preset_all_blocked).setOnClickListener {
+
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+
+            applyPreset(DomainRulesPreferences.getPresetAllBlocked(this), getString(R.string.split_sites_preset_all_blocked_title))
+
+        }
+
+        view.findViewById<View>(R.id.btn_cancel_preset).setOnClickListener {
+
+            dialog.dismiss()
+
+        }
+
+        dialog.show()
+
+    }
+
+    private fun confirmClearSites() {
+
+        val dialog = BottomSheetDialog(this)
+
+        val view = layoutInflater.inflate(R.layout.bottom_sheet_confirm_clear, null)
+
+        dialog.setContentView(view)
+
+        view.findViewById<View>(R.id.btn_cancel_clear).setOnClickListener {
+
+            dialog.dismiss()
+
+        }
+
+        view.findViewById<View>(R.id.btn_confirm_clear).setOnClickListener {
+
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+
+            dialog.dismiss()
+
+            domainPrefs.clearAll()
+
+            loadDomains()
+
+            Toast.makeText(this, R.string.split_sites_clear, Toast.LENGTH_SHORT).show()
+
+        }
+
+        dialog.show()
+
+    }
+
+    // --- Search & Filtering ---
+
+    private fun openSearch() {
+
+        titleContainer.isVisible = false
+
+        searchBarContainer.isVisible = true
+
+        searchInput.requestFocus()
+
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+
+        imm?.showSoftInput(searchInput, InputMethodManager.SHOW_IMPLICIT)
+
+    }
+
+    private fun closeSearch() {
+
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+
+        imm?.hideSoftInputFromWindow(searchInput.windowToken, 0)
+
+        searchInput.setText("")
+
+        searchBarContainer.isVisible = false
+
+        titleContainer.isVisible = true
+
+        applySearchFilter("")
+
+    }
+
+    private fun applySearchFilter(query: String) {
+
+        if (activeSection == SECTION_APPS) {
+
+            applyAppsFilter(query)
+
+        } else {
+
+            applySitesFilter(query)
+
+        }
+
+    }
+
+    private fun applyAppsFilter(query: String) {
+        val q = query.trim().lowercase()
+        val hideSys = appPrefs.hideSystemApps
+
+        val baseList = if (hideSys) {
+            allApps.filter { !it.isSystem || it.isSelected }
+        } else {
+            allApps
+        }
+
+        val filtered = (if (q.isEmpty()) {
+            baseList
+        } else {
+            baseList.filter {
+                it.name.contains(q, ignoreCase = true) || it.packageName.contains(q, ignoreCase = true)
+            }
+        }).sortedWith(
+            compareByDescending<AppItem> { it.isSelected }
+                .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+        )
+        appsAdapter.submitList(filtered)
+        appEmptyState.isVisible = filtered.isEmpty() && allApps.isNotEmpty()
+        updateAppCountDisplay()
+    }
+
+    private fun applySitesFilter(query: String) {
+
+        val q = query.trim().lowercase()
+
+        val filtered = if (q.isEmpty()) {
+
+            allDomains.toList()
+
+        } else {
+
+            allDomains.filter { it.contains(q) }
+
+        }
+
+        domainsAdapter.submitList(filtered)
+
+        sitesEmptyState.isVisible = filtered.isEmpty()
+
+    }
+
+    // --- Recycler View Adapters ---
+
+    private class AppsAdapter(
+
+        private val onToggle: (AppItem, Boolean) -> Unit
+
+    ) : RecyclerView.Adapter<AppsAdapter.AppViewHolder>() {
+
+        var currentList: List<AppItem> = emptyList()
+
+            private set
+
+        fun submitList(list: List<AppItem>) {
+
+            currentList = list
+
+            notifyDataSetChanged()
+
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): AppViewHolder {
+
+            val v = LayoutInflater.from(parent.context).inflate(R.layout.item_split_app, parent, false)
+
+            return AppViewHolder(v)
+
+        }
+
+        override fun onBindViewHolder(holder: AppViewHolder, position: Int) {
+
+            val item = currentList[position]
+
+            holder.appName.text = item.name
+
+            holder.appPackage.text = item.packageName
+
+            if (item.icon != null) {
+
+                holder.appIcon.setImageDrawable(item.icon)
+
+            } else {
+
+                holder.appIcon.setImageResource(R.mipmap.ic_launcher_round)
+
+            }
+
+            holder.checkbox.setOnCheckedChangeListener(null)
+
+            holder.checkbox.isChecked = item.isSelected
+
+            val toggleAction = {
+
+                val newState = !holder.checkbox.isChecked
+
+                holder.checkbox.isChecked = newState
+
+                onToggle(item, newState)
+
+            }
+
+            holder.itemView.setOnClickListener {
+
+                it.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+
+                toggleAction()
+
+            }
+
+            holder.checkbox.setOnClickListener {
+
+                it.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+
+                onToggle(item, holder.checkbox.isChecked)
+
+            }
+
+        }
+
+        override fun getItemCount(): Int = currentList.size
+
+        class AppViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+
+            val appIcon: ImageView = view.findViewById(R.id.app_icon)
+
+            val appName: TextView = view.findViewById(R.id.app_name)
+
+            val appPackage: TextView = view.findViewById(R.id.app_package)
+
+            val checkbox: CheckBox = view.findViewById(R.id.app_checkbox)
+
+        }
+
+    }
+
+    private class DomainsAdapter(
+
+        private val onDelete: (String) -> Unit
+
+    ) : RecyclerView.Adapter<DomainsAdapter.DomainViewHolder>() {
+
+        var currentList: List<String> = emptyList()
+
+            private set
+
+        fun submitList(list: List<String>) {
+
+            currentList = list
+
+            notifyDataSetChanged()
+
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): DomainViewHolder {
+
+            val v = LayoutInflater.from(parent.context).inflate(R.layout.item_split_domain, parent, false)
+
+            return DomainViewHolder(v)
+
+        }
+
+        override fun onBindViewHolder(holder: DomainViewHolder, position: Int) {
+
+            val domain = currentList[position]
+
+            holder.siteDomain.text = domain
+
+            holder.siteType.text = holder.itemView.context.getString(R.string.split_sites_domain_rule)
+
+            holder.btnDelete.setOnClickListener {
+
+                it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+
+                onDelete(domain)
+
+            }
+
+        }
+
+        override fun getItemCount(): Int = currentList.size
+
+        class DomainViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+
+            val siteDomain: TextView = view.findViewById(R.id.site_domain)
+
+            val siteType: TextView = view.findViewById(R.id.site_type)
+
+            val btnDelete: ImageView = view.findViewById(R.id.btn_delete_site)
+
+        }
+
+    }
+
 }

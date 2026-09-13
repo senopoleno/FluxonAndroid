@@ -13,11 +13,18 @@ object VpnIntentFactory {
             putExtra(Constants.INTENT_PORT, cfg.port)
             putExtra(Constants.INTENT_ROUTE, cfg.route)
             putExtra(Constants.INTENT_DNS, cfg.dns)
+            putExtra(Constants.INTENT_SECONDARY_DNS, cfg.secondaryDns)
             putExtra(Constants.INTENT_DNS_PORT, cfg.dnsPort)
+            putExtra(Constants.INTENT_MTU, cfg.mtu)
             putExtra(Constants.INTENT_PER_APP, cfg.perApp)
             putExtra(Constants.INTENT_APP_BYPASS, cfg.appBypass)
             putExtra(Constants.INTENT_APP_LIST, cfg.appList)
             putExtra(Constants.INTENT_IPV6_PROXY, cfg.ipv6Proxy)
+            putExtra(Constants.INTENT_BYPASS_LAN, cfg.bypassLan)
+            putExtra(Constants.INTENT_KILL_SWITCH, cfg.killSwitch)
+            putExtra(Constants.INTENT_IP_TYPE, cfg.ipType)
+            cfg.remoteServer?.let { putExtra(Constants.INTENT_REMOTE_SERVER, it) }
+            putExtra(Constants.INTENT_REMOTE_PORT, cfg.remotePort)
             cfg.udpGw?.let { putExtra(Constants.INTENT_UDP_GW, it) }
             cfg.username?.let { putExtra(Constants.INTENT_USERNAME, it) }
             cfg.password?.let { putExtra(Constants.INTENT_PASSWORD, it) }

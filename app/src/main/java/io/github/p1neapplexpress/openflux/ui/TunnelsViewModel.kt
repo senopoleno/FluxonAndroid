@@ -93,6 +93,12 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun getTunnelHealth(tunnelId: Long): TunnelHealth = healthCache[tunnelId] ?: TunnelHealth.UNKNOWN
 
+    private val _pingMap = MutableStateFlow<Map<Long, Long>>(emptyMap())
+    val pingMap: StateFlow<Map<Long, Long>> = _pingMap.asStateFlow()
+    private val pingCache = ConcurrentHashMap<Long, Long>()
+
+    fun getTunnelPing(tunnelId: Long): Long? = pingCache[tunnelId]
+
     private val _selected = MutableStateFlow<Tunnel?>(null)
     val selected: StateFlow<Tunnel?> = _selected.asStateFlow()
 
@@ -119,6 +125,21 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
                             refresh()
                         }
                     }
+                    is AppEvent.VpnDisconnected -> {
+                        if (_active.value.isActive) {
+                            Logx.i(TAG, "VpnDisconnected event received")
+                            val ctx = getApplication<Application>()
+                            try { ctx.unbindService(connection) } catch (_: Exception) {}
+                            bound = false
+                            service = null
+                            activeTunnelData = null
+                            _active.value = TunnelState.Idle
+                            _rxSpeed.value = 0L
+                            _txSpeed.value = 0L
+                            stopUptimeCounter()
+                            refresh()
+                        }
+                    }
                     else -> {}
                 }
             }
@@ -136,8 +157,17 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
     fun startTunnel(tunnel: Tunnel) {
         val running = _active.value
         if (running is TunnelState.Running && running.tunnel == tunnel) return
-        if (running.isActive) stop()
 
+        viewModelScope.launch {
+            if (_active.value.isActive) {
+                stopInternal()
+                delay(150)
+            }
+            startTunnelInternal(tunnel)
+        }
+    }
+
+    private fun startTunnelInternal(tunnel: Tunnel) {
         _active.value = TunnelState.Connecting(tunnel)
         _tunnelHealth.value = TunnelHealth.CHECKING
 
@@ -149,11 +179,60 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         val perApp = selectedApps.isNotEmpty()
         val appList = selectedApps.toTypedArray()
 
+        val appSettings = io.github.p1neapplexpress.openflux.util.AppSettings(ctx)
+        val session = io.github.p1neapplexpress.openflux.util.LocalSocksSession.generateNew(
+            authEnabled = appSettings.socks5AuthEnabled,
+            customUser = appSettings.socks5CustomUser,
+            customPass = appSettings.socks5CustomPass,
+            shareLan = appSettings.shareLanProxy,
+            customPort = if (appSettings.shareLanProxy) appSettings.lanProxyPort else null
+        )
+
+        val modifiedPayload = prepared.transportConnPayload.toMutableList()
+        fun removeFlag(flag: String) {
+            val idx = modifiedPayload.indexOf(flag)
+            if (idx != -1) {
+                if (idx + 1 < modifiedPayload.size) {
+                    modifiedPayload.removeAt(idx + 1)
+                }
+                modifiedPayload.removeAt(idx)
+            }
+        }
+        removeFlag("-socks5")
+        removeFlag("--socks5")
+        removeFlag("-socks5-user")
+        removeFlag("--socks5-user")
+        removeFlag("-socks5-pass")
+        removeFlag("--socks5-pass")
+
+        val bindHost = if (session.isSharedLan) "0.0.0.0" else "127.0.0.1"
+        modifiedPayload.add("-socks5")
+        modifiedPayload.add("$bindHost:${session.port}")
+        if (session.isAuthEnabled && session.password.isNotEmpty()) {
+            modifiedPayload.add("-socks5-user")
+            modifiedPayload.add(session.username)
+            modifiedPayload.add("-socks5-pass")
+            modifiedPayload.add(session.password)
+        }
+
+        val (remoteHost, remotePort) = io.github.p1neapplexpress.openflux.vpn.TunnelEndpointHelper.extractTarget(prepared)
         val cfg = VPNConfig(
             name = prepared.name,
+            port = session.port,
+            username = if (session.isAuthEnabled && session.password.isNotEmpty()) session.username else null,
+            password = if (session.isAuthEnabled && session.password.isNotEmpty()) session.password else null,
+            dns = appSettings.primaryDns,
+            secondaryDns = appSettings.secondaryDns,
+            mtu = appSettings.mtu,
+            ipv6Proxy = appSettings.ipv6Proxy,
             perApp = perApp,
             appBypass = appBypass,
             appList = appList,
+            bypassLan = appSettings.bypassLan,
+            killSwitch = appSettings.killSwitch,
+            ipType = appSettings.ipType,
+            remoteServer = remoteHost,
+            remotePort = remotePort,
         )
         val intent = VpnIntentFactory.build(ctx, cfg)
 
@@ -169,8 +248,8 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
             Context.BIND_AUTO_CREATE,
         )
 
-        activeTunnelData = prepared
-        val isDebug = prepared.transportConnPayload.contains("--debug")
+        activeTunnelData = prepared.copy(transportConnPayload = modifiedPayload)
+        val isDebug = modifiedPayload.contains("--debug")
         Logx.setVerbose(isDebug)
         Logx.i(TAG, "logging initialized: verbose=$isDebug (level: ${if (isDebug) "DEBUG" else "INFO"})")
 
@@ -192,7 +271,7 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 service?.startOpenFluxNative(
                     prepared.transportType,
-                    prepared.transportConnPayload.toTypedArray()
+                    modifiedPayload.toTypedArray()
                 )
             } catch (e: Exception) {
                 Logx.e(TAG, "startOpenFluxNative failed", e)
@@ -263,9 +342,9 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun stop() {
-        Logx.i(TAG, "stop()")
-        viewModelScope.launch(Dispatchers.IO) {
+    suspend fun stopInternal() {
+        Logx.i(TAG, "stopInternal()")
+        withContext(Dispatchers.IO) {
             try {
                 service?.stopOpenFluxNative()
                 service?.stopVpn()
@@ -278,11 +357,18 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
             service = null
             activeTunnelData = null
             Logx.setVerbose(false)
-            _active.value = TunnelState.Idle
-            _rxSpeed.value = 0L
-            _txSpeed.value = 0L
-            stopUptimeCounter()
-            refresh()
+        }
+        _active.value = TunnelState.Idle
+        _rxSpeed.value = 0L
+        _txSpeed.value = 0L
+        stopUptimeCounter()
+        refresh()
+    }
+
+    fun stop() {
+        Logx.i(TAG, "stop()")
+        viewModelScope.launch {
+            stopInternal()
         }
     }
 
@@ -395,10 +481,12 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
             return false
         }
 
+        val session = io.github.p1neapplexpress.openflux.util.LocalSocksSession.getActive()
+
         // 1. Verify that the local SOCKS proxy is listening and responsive
         val socksPortOpen = try {
             java.net.Socket().use { s ->
-                s.connect(java.net.InetSocketAddress("127.0.0.1", 1080), 2000)
+                s.connect(java.net.InetSocketAddress("127.0.0.1", session.port), 2000)
                 s.isConnected
             }
         } catch (_: Exception) {
@@ -411,7 +499,8 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         if (!backendOk) return false
 
         // 3. Verify end-to-end connectivity through SOCKS5 proxy
-        val socksProxy = java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", 1080))
+        io.github.p1neapplexpress.openflux.util.LocalSocksSession.setupAuthenticator(session)
+        val socksProxy = java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", session.port))
         val proxyLive = probeLiveConnectivity(socksProxy)
         if (proxyLive) return true
 
@@ -447,76 +536,59 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun probeTunnel(tunnel: Tunnel): Boolean {
-        return try {
+        val startMs = android.os.SystemClock.elapsedRealtime()
+        val success = try {
             val transportType = tunnel.transportType.lowercase()
-            if (transportType == "max" || transportType == "oneme") {
-                val token = argValue(tunnel.transportConnPayload, "--maxToken")
-                val uid = argValue(tunnel.transportConnPayload, "--maxUid")
-                if (token.isBlank() || uid.isBlank() || uid.toLongOrNull() == null) {
-                    return false
-                }
-                java.net.Socket().use { socket ->
-                    socket.connect(java.net.InetSocketAddress("ws-api.oneme.ru", 443), 5000)
-                    socket.isConnected
-                }
+            val target: Pair<String, Int> = if (transportType == "max" || transportType == "oneme") {
+                Pair("ws-api.oneme.ru", 443)
             } else {
                 val urlStr = argValue(tunnel.transportConnPayload, "--url")
-                if (!urlStr.startsWith("http://", ignoreCase = true) && !urlStr.startsWith("https://", ignoreCase = true)) {
-                    return false
-                }
-                val conn = java.net.URL(urlStr).openConnection() as java.net.HttpURLConnection
-                conn.connectTimeout = 6000
-                conn.readTimeout = 6000
-                conn.requestMethod = "GET"
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                conn.setRequestProperty("Accept-Language", "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7")
-                conn.instanceFollowRedirects = true
-
-                val code = try {
-                    conn.responseCode
-                } catch (_: Exception) {
-                    -1
-                }
-
-                if (code !in 200..399) {
-                    conn.disconnect()
-                    return false
-                }
-
-                val finalHost = conn.url.host.lowercase()
-                if (finalHost.contains("passport.yandex")) {
-                    conn.disconnect()
-                    return false
-                }
-
-                val bodySample = try {
-                    conn.inputStream.bufferedReader().use { r ->
-                        val buffer = CharArray(16384)
-                        val read = r.read(buffer)
-                        if (read > 0) String(buffer, 0, read) else ""
-                    }
-                } catch (_: Exception) {
-                    ""
-                } finally {
-                    conn.disconnect()
-                }
-
-                if (urlStr.contains("docs.yandex") || urlStr.contains("disk.yandex") || urlStr.contains("yadi.sk")) {
-                    val lower = bodySample.lowercase()
-                    if (lower.contains("client-config") || lower.contains("officeactiondata") || lower.contains("publicresource") || lower.contains("docid") || lower.contains("editor_config")) {
-                        true
-                    } else if (lower.contains("<title>ничего не найдено") || lower.contains("<title>404") || lower.contains("error__title") || lower.contains("файл не найден") || lower.contains("файл удален")) {
-                        false
-                    } else {
-                        code in 200..399
-                    }
+                if (urlStr.isNotBlank()) {
+                    val uri = java.net.URI(urlStr)
+                    val h = uri.host
+                    val p = if (uri.port > 0) uri.port else if (uri.scheme.equals("https", ignoreCase = true)) 443 else 80
+                    if (!h.isNullOrBlank()) Pair(h, p) else Pair("1.1.1.1", 53)
                 } else {
-                    code in 200..399
+                    Pair("1.1.1.1", 53)
                 }
+            }
+
+            java.net.Socket().use { socket ->
+                socket.connect(java.net.InetSocketAddress(target.first, target.second), 2500)
+                socket.isConnected
             }
         } catch (_: Exception) {
             false
+        }
+
+        if (success) {
+            val latency = (android.os.SystemClock.elapsedRealtime() - startMs).coerceAtLeast(1L)
+            pingCache[tunnel.id] = latency
+            _pingMap.value = pingCache.toMap()
+        } else {
+            pingCache.remove(tunnel.id)
+            _pingMap.value = pingCache.toMap()
+        }
+
+        return success
+    }
+
+    private fun triggerFailoverIfNeeded(failedTunnel: Tunnel) {
+        val appSettings = io.github.p1neapplexpress.openflux.util.AppSettings(getApplication())
+        if (!appSettings.autoFailover) return
+
+        val all = repo.load()
+        if (all.size <= 1) return
+        val nextTunnel = all.firstOrNull { it.id != failedTunnel.id } ?: return
+
+        Logx.i(TAG, "Failover triggered: switching from '${failedTunnel.name}' to '${nextTunnel.name}'")
+        EventBus.dispatch(io.github.p1neapplexpress.openflux.event.AppEvent.LogMessage("[I] Failover: переключение на '${nextTunnel.name}'..."))
+
+        viewModelScope.launch(Dispatchers.Main) {
+            stop()
+            kotlinx.coroutines.delay(1000L)
+            selectTunnel(nextTunnel)
+            startTunnel(nextTunnel)
         }
     }
 

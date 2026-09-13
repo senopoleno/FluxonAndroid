@@ -4,7 +4,8 @@ object RussianAppsPreset {
 
     /**
      * Популярные российские сервисы и приложения (банки, Госуслуги, маркетплейсы,
-     * сервисы Яндекса, доставка, связь, такси и медиа), чувствительные к зарубежным IP.
+     * фастфуд, сервисы Яндекса, доставка, связь, такси, образование, умный дом и медиа),
+     * чувствительные к зарубежным IP и рекомендуемые для режима обхода по умолчанию.
      */
     val PACKAGE_NAMES: Set<String> = setOf(
         // Банки и финансы
@@ -53,8 +54,9 @@ object RussianAppsPreset {
         "ru.aeroflot.mobile",
         "ru.s7.touch",
         "ru.pobeda.aero",
+        "com.taxsee.taxsee", // Такси Максим / MAX
 
-        // Маркетплейсы, ритейл и доставка
+        // Маркетплейсы, ритейл, фастфуд и доставка
         "ru.ozon.app.android",
         "com.wildberries.ru",
         "com.avito.android",
@@ -66,13 +68,26 @@ object RussianAppsPreset {
         "ru.sbermarket.android",
         "ru.samokat.app",
         "ru.tander.magnit",
-        "ru.x5.retail.loyalty",
+        "ru.x5.retail.loyalty", // X5 Клуб / Пятёрочка
+        "ru.pyaterochka.app.browser", // Пятёрочка
+        "ru.pyaterochka",
         "ru.vkusvill.app",
         "ru.perekrestok.app",
-        "ru.dns.shop",
+        "ru.dns.shop", // DNS
+        "ru.dns.shop.android", // DNS
+        "ru.burgerking", // Burger King
+        "com.tapston.burgerking",
+        "ru.rostics.app", // Rostic's
+        "ru.rostics",
+        "ru.kfc.kfc_delivery",
+        "com.yum.kfc",
+        "ru.dodopizza.app", // Додо Пицца
+        "com.dodopizza.driveapp",
         "ru.mvideo.app",
         "ru.eldorado.app",
         "ru.leroymerlin.mobile",
+        "ru.maxiapp.client", // Макси / MAX
+        "ru.maxi.retail",
 
         // Связь и телеком
         "ru.mts.mymts",
@@ -81,6 +96,32 @@ object RussianAppsPreset {
         "ru.tele2.mytele2",
         "ru.rt.myrt",
         "com.yota.user",
+        "ru.filit.motiv.app", // МОТИВ
+        "ru.motiv.app",
+        "ru.ycc.motiv",
+        "simmotiv.id.abonent",
+
+        // Умный дом и IoT
+        "com.yandex.iot", // Умный дом (Дом с Алисой)
+        "ru.rt.smarthome", // Умный дом Ростелеком
+        "ru.sberbank.iot", // Умный дом Сбер
+        "com.ertelecom.smarthome", // Умный дом Дом.ru
+        "ru.mts.smarthome", // Умный дом МТС
+
+        // Образование
+        "net.umschool.umschool_flutter.prod", // УМСКУЛ
+        "net.umschool.umschool",
+        "ru.umschool",
+        "ru.umschool.app",
+        "ru.maximumtest.app", // MAXIMUM Education / MAX
+
+        // MAX сервисы, утилиты и стриминг
+        "com.wbd.stream", // Max
+        "ru.makc.app", // МАКС
+        "ru.makc.mobile",
+        "ru.makc.client",
+        "com.nusp.max",
+        "com.algorithmservice.max2",
 
         // Медиа, соцсети и стриминг
         "com.vkontakte.android",

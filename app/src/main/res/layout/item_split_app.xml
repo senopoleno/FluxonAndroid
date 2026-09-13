@@ -68,6 +68,7 @@
         android:layout_height="wrap_content"
         android:clickable="false"
         android:focusable="false"
-        app:buttonTint="@color/accent_blue" />
+        app:buttonTint="@color/accent_blue"
+        app:buttonIconTint="@android:color/white" />
 
 </LinearLayout>

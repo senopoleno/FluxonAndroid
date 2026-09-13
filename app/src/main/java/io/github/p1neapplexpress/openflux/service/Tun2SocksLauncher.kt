@@ -31,6 +31,7 @@ class Tun2SocksLauncher(private val context: Context) {
         dnsPort: Int,
         ipv6: Boolean,
         udpgw: String?,
+        mtu: Int = 1400,
     ): Boolean {
         if (fd <= 0) {
             Logx.e(TAG, "invalid tun fd: $fd")
@@ -59,7 +60,7 @@ class Tun2SocksLauncher(private val context: Context) {
         
         Logx.i(TAG, "starting tun2socks")
         ProcessRunner.execFireAndForget(
-            command = buildCommand(tun2socksBin, fd, server, port, username, password, ipv6, udpgw, sockPath),
+            command = buildCommand(tun2socksBin, fd, server, port, username, password, ipv6, udpgw, sockPath, mtu),
             workingDir = context.filesDir.absolutePath,
         )
         Thread.sleep(500L)
@@ -101,13 +102,14 @@ class Tun2SocksLauncher(private val context: Context) {
         ipv6: Boolean,
         udpgw: String?,
         sockPath: File,
+        mtu: Int,
     ): List<String> = buildList {
         add(bin)
         add("--netif-ipaddr"); add(NETIF_IPADDR)
         add("--netif-netmask"); add(NETIF_NETMASK)
         add("--socks-server-addr"); add("$server:$port")
         add("--tunfd"); add(fd.toString())
-        add("--tunmtu"); add(TUN_MTU.toString())
+        add("--tunmtu"); add(mtu.toString())
         val logLevel = if (Logx.isVerbose) "4" else LOG_LEVEL
         add("--loglevel"); add(logLevel)
         add("--pid"); add("${context.filesDir}/tun2socks.pid")

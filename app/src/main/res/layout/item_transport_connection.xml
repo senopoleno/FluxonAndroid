@@ -5,6 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="@drawable/item_tunnel_background"
+    android:clipToOutline="true"
     android:layout_marginHorizontal="12dp"
     android:layout_marginVertical="8dp"
     android:elevation="4dp"

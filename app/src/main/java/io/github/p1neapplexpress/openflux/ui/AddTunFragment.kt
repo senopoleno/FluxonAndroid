@@ -12,7 +12,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.activityViewModels
-import com.google.android.material.switchmaterial.SwitchMaterial
+import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.textfield.TextInputLayout
 import io.github.p1neapplexpress.openflux.R
 import io.github.p1neapplexpress.openflux.data.TransportType
@@ -64,7 +64,7 @@ class AddTunFragment : BaseFragment() {
         val yandexContainer = view.findViewById<TextInputLayout>(R.id.yandexUrlContainer)
         val encryptionKeyContainer = view.findViewById<TextInputLayout>(R.id.encryptionKeyContainer)
         val transportLabel = view.findViewById<TextView>(R.id.selectedTransport)
-        val debugSwitch = view.findViewById<SwitchMaterial>(R.id.debugSwitch)
+        val debugSwitch = view.findViewById<MaterialSwitch>(R.id.debugSwitch)
         val docUrl = view.findViewById<TextView>(R.id.documentUrl)
         val maxToken = view.findViewById<TextView>(R.id.maxToken)
         val maxUid = view.findViewById<TextView>(R.id.maxUserId)

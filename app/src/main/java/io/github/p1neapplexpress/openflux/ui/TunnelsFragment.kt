@@ -39,6 +39,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import io.github.g00fy2.quickie.QRResult
 import io.github.g00fy2.quickie.ScanQRCode
 import io.github.p1neapplexpress.openflux.R
+import io.github.p1neapplexpress.openflux.util.AppSettings
 import io.github.p1neapplexpress.openflux.data.Tunnel
 import io.github.p1neapplexpress.openflux.data.TunnelHealth
 import io.github.p1neapplexpress.openflux.data.TunnelState
@@ -74,6 +75,9 @@ class TunnelsFragment : BaseFragment() {
     private lateinit var uptimeContainer: View
     private lateinit var uptimeText: TextView
     private lateinit var speedText: TextView
+    private lateinit var memoryContainer: View
+    private lateinit var memoryText: TextView
+    private lateinit var appSettings: AppSettings
 
     private var rotationAnim: ObjectAnimator? = null
     private var breathAnim: ObjectAnimator? = null
@@ -147,44 +151,51 @@ class TunnelsFragment : BaseFragment() {
 
     private fun showImportLinkDialog() {
         val context = requireContext()
+        val dialog = com.google.android.material.bottomsheet.BottomSheetDialog(context)
+        val view = layoutInflater.inflate(R.layout.bottom_sheet_import_link, null)
+        dialog.setContentView(view)
+
+        val inputEdit = view.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.input_link_value)
+        val btnPaste = view.findViewById<View>(R.id.btn_paste_link)
+        val btnCancel = view.findViewById<View>(R.id.btn_cancel_import)
+        val btnConfirm = view.findViewById<View>(R.id.btn_confirm_import)
+
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-        val clipText = clipboard?.primaryClip?.getItemAt(0)?.text?.toString()?.trim()
-
-        val inputLayout = com.google.android.material.textfield.TextInputLayout(context).apply {
-            boxBackgroundMode = com.google.android.material.textfield.TextInputLayout.BOX_BACKGROUND_OUTLINE
-            hint = getString(R.string.import_link_dialog_hint)
-            val padH = (20 * resources.displayMetrics.density).toInt()
-            val padT = (12 * resources.displayMetrics.density).toInt()
-            setPadding(padH, padT, padH, 0)
-        }
-        val editText = com.google.android.material.textfield.TextInputEditText(inputLayout.context).apply {
-            maxLines = 4
-            textSize = 14f
-            clipText?.let {
-                if (it.startsWith("openflux://", ignoreCase = true) || it.startsWith("{")) {
-                    setText(it)
-                    setSelection(it.length)
-                }
+        val clipText = clipboard?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()?.trim()
+        clipText?.let {
+            if (it.startsWith("openflux://", ignoreCase = true) || it.startsWith("{") || it.startsWith("vless://") || it.startsWith("vmess://") || it.startsWith("http")) {
+                inputEdit.setText(it)
+                inputEdit.setSelection(it.length)
             }
         }
-        inputLayout.addView(editText)
 
-        com.google.android.material.dialog.MaterialAlertDialogBuilder(context)
-            .setTitle(R.string.import_link_dialog_title)
-            .setView(inputLayout)
-            .setPositiveButton(R.string.import_link_dialog_btn) { _, _ ->
-                val text = editText.text?.toString()?.trim()
-                val tunnel = TunnelLinkParser.parse(text, context)
-                if (tunnel != null) {
-                    vm.addTunnel(tunnel)
-                    vm.startTunnel(tunnel)
-                    Toast.makeText(context, R.string.config_saved, Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(context, R.string.import_link_invalid, Toast.LENGTH_LONG).show()
-                }
+        btnPaste.setOnClickListener {
+            val clip = clipboard?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()?.trim()
+            if (!clip.isNullOrBlank()) {
+                inputEdit.setText(clip)
+                inputEdit.setSelection(clip.length)
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        }
+
+        btnCancel.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        btnConfirm.setOnClickListener {
+            val text = inputEdit.text?.toString()?.trim()
+            val tunnel = TunnelLinkParser.parse(text, context)
+            if (tunnel != null) {
+                dialog.dismiss()
+                vm.addTunnel(tunnel)
+                vm.startTunnel(tunnel)
+                Toast.makeText(context, R.string.config_saved, Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, R.string.import_link_invalid, Toast.LENGTH_LONG).show()
+            }
+        }
+
+        dialog.show()
+        inputEdit.requestFocus()
     }
 
     override fun onCreateView(i: LayoutInflater, c: ViewGroup?, s: Bundle?) =
@@ -207,6 +218,10 @@ class TunnelsFragment : BaseFragment() {
         uptimeContainer = view.findViewById(R.id.uptimeContainer)
         uptimeText = view.findViewById(R.id.uptimeText)
         speedText = view.findViewById(R.id.speedText)
+        memoryContainer = view.findViewById(R.id.memoryContainer)
+        memoryText = view.findViewById(R.id.memoryText)
+        appSettings = AppSettings(requireContext())
+        updateMemoryUsage()
 
         connectButton.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -227,16 +242,9 @@ class TunnelsFragment : BaseFragment() {
             vm.checkSelectedHealth(force = true)
         }
 
-        val themePrefs = ThemePreferences(requireContext())
-        view.findViewById<View>(R.id.btnThemeToggle)?.setOnClickListener {
+        view.findViewById<View>(R.id.btnSettings)?.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            val newMode = if (themePrefs.themeMode == ThemePreferences.THEME_LIGHT) {
-                ThemePreferences.THEME_DARK
-            } else {
-                ThemePreferences.THEME_LIGHT
-            }
-            themePrefs.themeMode = newMode
-            themePrefs.applyTheme()
+            startActivity(Intent(requireContext(), SettingsActivity::class.java))
         }
 
         view.findViewById<View>(R.id.btnSplitTunnel)?.setOnClickListener {
@@ -247,10 +255,10 @@ class TunnelsFragment : BaseFragment() {
         view.findViewById<View>(R.id.switchButton).setOnClickListener {
             parentFragmentManager.beginTransaction()
                 .setCustomAnimations(
-                    R.anim.slide_in_right,
-                    R.anim.slide_out_left,
-                    R.anim.slide_in_left,
-                    R.anim.slide_out_right
+                    R.anim.slide_in_bottom,
+                    R.anim.fade_out,
+                    R.anim.fade_in,
+                    R.anim.slide_out_bottom
                 )
                 .replace(R.id.main, AddTunFragment.new())
                 .addToBackStack("switch")
@@ -277,6 +285,7 @@ class TunnelsFragment : BaseFragment() {
     override fun onResume() {
         super.onResume()
         vm.checkSelectedHealth(force = false)
+        updateMemoryUsage()
     }
 
     private fun requestVpnAndStart() {
@@ -348,6 +357,7 @@ class TunnelsFragment : BaseFragment() {
         val items = content.findViewById<LinearLayout>(R.id.dropdown_items)
         val selectedId = vm.selectedTunnelId
         val rowDots = mutableMapOf<Long, View>()
+        val rowPings = mutableMapOf<Long, TextView>()
 
         fun tintDot(dot: View, health: TunnelHealth) {
             val colorRes = when (health) {
@@ -359,11 +369,27 @@ class TunnelsFragment : BaseFragment() {
             dot.background?.setTint(ContextCompat.getColor(requireContext(), colorRes))
         }
 
+        fun updatePingView(pingView: TextView, ping: Long?) {
+            if (ping != null && ping > 0) {
+                pingView.isVisible = true
+                pingView.text = getString(R.string.ping_ms_format, ping)
+                val colorRes = when {
+                    ping < 150 -> R.color.state_running
+                    ping < 350 -> R.color.state_connecting
+                    else -> R.color.state_error
+                }
+                pingView.setTextColor(ContextCompat.getColor(requireContext(), colorRes))
+            } else {
+                pingView.isVisible = false
+            }
+        }
+
         for (tunnel in tunnels) {
             val row = inflater.inflate(R.layout.item_dropdown_config, items, false)
             val nameView = row.findViewById<TextView>(R.id.item_name)
             val check = row.findViewById<ImageView>(R.id.item_check)
             val dot = row.findViewById<View>(R.id.item_dot)
+            val pingView = row.findViewById<TextView>(R.id.item_ping)
             val isSelected = tunnel.id == selectedId
 
             nameView.text = tunnel.name
@@ -378,6 +404,9 @@ class TunnelsFragment : BaseFragment() {
 
             tintDot(dot, vm.getTunnelHealth(tunnel.id))
             rowDots[tunnel.id] = dot
+
+            updatePingView(pingView, vm.getTunnelPing(tunnel.id))
+            rowPings[tunnel.id] = pingView
 
             row.setOnClickListener {
                 it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -448,17 +477,27 @@ class TunnelsFragment : BaseFragment() {
 
         chevron.animate().rotation(180f).setDuration(220L).setInterpolator(DecelerateInterpolator()).start()
 
-        val healthCollectorJob = viewLifecycleOwner.lifecycleScope.launch {
-            vm.healthMap.collect { map ->
-                for ((id, h) in map) {
-                    val d = rowDots[id] ?: continue
-                    tintDot(d, h)
+        val dropdownCollectorsJob = viewLifecycleOwner.lifecycleScope.launch {
+            launch {
+                vm.healthMap.collect { map ->
+                    for ((id, h) in map) {
+                        val d = rowDots[id] ?: continue
+                        tintDot(d, h)
+                    }
+                }
+            }
+            launch {
+                vm.pingMap.collect { map ->
+                    for ((id, ping) in map) {
+                        val pv = rowPings[id] ?: continue
+                        updatePingView(pv, ping)
+                    }
                 }
             }
         }
 
         pw.setOnDismissListener {
-            healthCollectorJob.cancel()
+            dropdownCollectorsJob.cancel()
             chevron.animate().rotation(0f).setDuration(180L).setInterpolator(DecelerateInterpolator()).start()
             popup = null
         }
@@ -489,10 +528,10 @@ class TunnelsFragment : BaseFragment() {
             popup?.dismiss()
             parentFragmentManager.beginTransaction()
                 .setCustomAnimations(
-                    R.anim.slide_in_right,
-                    R.anim.slide_out_left,
-                    R.anim.slide_in_left,
-                    R.anim.slide_out_right
+                    R.anim.slide_in_bottom,
+                    R.anim.fade_out,
+                    R.anim.fade_in,
+                    R.anim.slide_out_bottom
                 )
                 .replace(R.id.main, AddTunFragment.edit(tunnel))
                 .addToBackStack("edit")
@@ -598,7 +637,6 @@ class TunnelsFragment : BaseFragment() {
                         is TunnelState.Connecting -> getString(R.string.connecting)
                         is TunnelState.StartingTransport -> getString(R.string.starting_transport)
                         is TunnelState.StartingTun2Socks -> getString(R.string.starting_tsocks)
-                        else -> ""
                     }
                     statusText.text = label
                     statusText.setTextColor(color)
@@ -680,7 +718,6 @@ class TunnelsFragment : BaseFragment() {
                     is TunnelState.Connecting -> getString(R.string.connecting)
                     is TunnelState.StartingTransport -> getString(R.string.starting_transport)
                     is TunnelState.StartingTun2Socks -> getString(R.string.starting_tsocks)
-                    else -> ""
                 }
                 statusText.text = label
                 statusText.setTextColor(color)
@@ -834,6 +871,21 @@ class TunnelsFragment : BaseFragment() {
             .translationY(12f)
             .setDuration(200L)
             .start()
+    }
+
+
+
+
+    private fun updateMemoryUsage() {
+        if (!::appSettings.isInitialized || !::memoryContainer.isInitialized || !::memoryText.isInitialized) return
+        if (appSettings.showMemoryUsage) {
+            memoryContainer.visibility = View.VISIBLE
+            val runtime = Runtime.getRuntime()
+            val usedMemInMB = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
+            memoryText.text = getString(R.string.memory_usage_format, usedMemInMB)
+        } else {
+            memoryContainer.visibility = View.GONE
+        }
     }
 
     override fun onDestroyView() {

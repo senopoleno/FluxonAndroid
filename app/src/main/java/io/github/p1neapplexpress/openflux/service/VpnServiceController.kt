@@ -1,30 +1,51 @@
 package io.github.p1neapplexpress.openflux.service
 
 import android.content.Intent
+
 import android.content.pm.PackageManager
+
 import android.net.VpnService
+
 import android.os.ParcelFileDescriptor
+
 import io.github.p1neapplexpress.openflux.event.AppEvent
+
 import io.github.p1neapplexpress.openflux.event.EventBus
+
+import io.github.p1neapplexpress.openflux.util.AppSettings
+
 import io.github.p1neapplexpress.openflux.util.Constants
+
 import io.github.p1neapplexpress.openflux.util.Logx
+
 import io.github.p1neapplexpress.openflux.util.Routes
+
 import java.util.concurrent.atomic.AtomicBoolean
 
 class VpnServiceController(private val service: VpnService) {
 
     companion object {
+
         private const val TAG = "VpnServiceController"
+
         private const val MTU = 1400
+
         private const val VPN_IPV4_ADDR = "26.26.26.1"
+
         private const val VPN_IPV4_PREFIX = 24
+
         private const val VPN_IPV6_ADDR = "fdfe:dcba:9876::1"
+
         private const val VPN_IPV6_PREFIX = 126
+
         private const val PRIMARY_DNS = "1.1.1.1"
+
         private const val SECONDARY_DNS = "8.8.8.8"
+
     }
 
-    private var iface: ParcelFileDescriptor? = null
+    @Volatile private var iface: ParcelFileDescriptor? = null
+
     val isRunning = AtomicBoolean(false)
 
     val fd: Int get() = iface?.fd ?: -1
@@ -32,84 +53,189 @@ class VpnServiceController(private val service: VpnService) {
     fun isConfigured(): Boolean = iface != null
 
     fun configure(intent: Intent) {
+
         if (iface != null) {
+
             Logx.w(TAG, "configure() called twice; ignoring")
+
             return
+
         }
 
         val name = intent.getStringExtra(Constants.INTENT_NAME) ?: "Fluxon"
+
         val route = intent.getStringExtra(Constants.INTENT_ROUTE)
+
         val perApp = intent.getBooleanExtra(Constants.INTENT_PER_APP, false)
+
         val appBypass = intent.getBooleanExtra(Constants.INTENT_APP_BYPASS, false)
+
         val appList = intent.getStringArrayExtra(Constants.INTENT_APP_LIST) ?: emptyArray()
+
         val ipv6 = intent.getBooleanExtra(Constants.INTENT_IPV6_PROXY, false)
 
-        val builder = service.Builder()
-            .setMtu(MTU)
-            .setSession(name)
-            .addAddress(VPN_IPV4_ADDR, VPN_IPV4_PREFIX)
-            .addDnsServer(PRIMARY_DNS)
-            .addDnsServer(SECONDARY_DNS)
+        val dns = intent.getStringExtra(Constants.INTENT_DNS)?.ifBlank { null } ?: PRIMARY_DNS
 
-        if (ipv6) {
-            builder.addAddress(VPN_IPV6_ADDR, VPN_IPV6_PREFIX)
-                .addRoute("::", 0)
+        val secDns = intent.getStringExtra(Constants.INTENT_SECONDARY_DNS)?.ifBlank { null } ?: SECONDARY_DNS
+
+        val mtu = intent.getIntExtra(Constants.INTENT_MTU, MTU).coerceIn(1280, 1500)
+
+        val bypassLan = intent.getBooleanExtra(Constants.INTENT_BYPASS_LAN, true)
+
+        val killSwitch = intent.getBooleanExtra(Constants.INTENT_KILL_SWITCH, false)
+
+        val ipType = intent.getIntExtra(Constants.INTENT_IP_TYPE, AppSettings.IP_TYPE_AUTO)
+
+        val builder = service.Builder()
+
+            .setMtu(mtu)
+
+            .setSession(name)
+
+            .addDnsServer(dns)
+
+            .addDnsServer(secDns)
+
+        // killSwitch is handled by VPN routing without blocking TUN FD
+
+        when (ipType) {
+
+            AppSettings.IP_TYPE_IPV4 -> {
+
+                builder.addAddress(VPN_IPV4_ADDR, VPN_IPV4_PREFIX)
+
+                Routes.addRoutes(service, builder, route, bypassLan)
+
+            }
+
+            AppSettings.IP_TYPE_IPV6 -> {
+
+                builder.addAddress(VPN_IPV6_ADDR, VPN_IPV6_PREFIX)
+
+                    .addRoute("::", 0)
+
+            }
+
+            else -> { // Auto / Dual-stack
+
+                builder.addAddress(VPN_IPV4_ADDR, VPN_IPV4_PREFIX)
+
+                Routes.addRoutes(service, builder, route, bypassLan)
+
+                if (ipv6) {
+
+                    builder.addAddress(VPN_IPV6_ADDR, VPN_IPV6_PREFIX)
+
+                        .addRoute("::", 0)
+
+                }
+
+            }
+
         }
 
-        Routes.addRoutes(service, builder, route)
-        builder.addRoute(PRIMARY_DNS, 32)
-        builder.addRoute(SECONDARY_DNS, 32)
+        listOfNotNull(dns, secDns).forEach { server ->
+            runCatching {
+                val addr = java.net.InetAddress.getByName(server)
+                val prefix = if (addr is java.net.Inet6Address) 128 else 32
+                builder.addRoute(addr, prefix)
+            }
+        }
 
         val effectivePerApp = perApp && appList.isNotEmpty()
+
         if (effectivePerApp && !appBypass) {
-            // Proxy mode: only allow selected apps.
-            // Android VpnService.Builder forbids mixing addAllowedApplication and
-            // addDisallowedApplication. Apps not in the allowed list (including this
-            // VPN service app) are automatically excluded.
+
             configureAppRouting(builder, bypass = false, appList)
+
         } else {
-            // Bypass mode or normal full tunnel:
-            // Disallow our own app so native transport traffic bypasses VPN loop.
+
             runCatching { builder.addDisallowedApplication(service.packageName) }
+
                 .onFailure { Logx.w(TAG, "disallow self failed: ${it.message}") }
+
             if (effectivePerApp && appBypass) {
+
                 configureAppRouting(builder, bypass = true, appList)
+
             }
+
         }
 
         iface = builder.establish()
+
         if (iface == null) {
+
             Logx.e(TAG, "Failed to establish VPN interface")
+
             EventBus.dispatch(AppEvent.LogMessage("[E] VPN establish failed"))
+
         } else {
+
             Logx.d(TAG, "VPN interface established fd=${iface?.fd}")
+
         }
+
     }
 
     private fun configureAppRouting(
+
         builder: VpnService.Builder,
+
         bypass: Boolean,
+
         apps: Array<String>,
+
     ) {
+
         val self = service.packageName
+
         for (raw in apps) {
+
             val pkg = raw.trim()
+
             if (pkg.isEmpty() || pkg == self) continue
-            runCatching {
-                if (bypass) builder.addDisallowedApplication(pkg)
-                else builder.addAllowedApplication(pkg)
-            }.onFailure {
-                if (it !is PackageManager.NameNotFoundException) {
-                    Logx.w(TAG, "app routing failed for $pkg: ${it.message}")
+
+            try {
+
+                if (bypass) {
+
+                    builder.addDisallowedApplication(pkg)
+
+                } else {
+
+                    builder.addAllowedApplication(pkg)
+
                 }
+
+            } catch (e: PackageManager.NameNotFoundException) {
+
+                Logx.w(TAG, "Package not installed, skipping: $pkg")
+
+            } catch (e: Exception) {
+
+                Logx.w(TAG, "Error adding package $pkg: ${e.message}")
+
             }
+
         }
+
     }
 
     fun stop() {
-        runCatching { iface?.close() }
-            .onFailure { Logx.e(TAG, "close iface failed", it) }
-        iface = null
+
         isRunning.set(false)
+
+        iface?.let {
+
+            runCatching { it.close() }
+
+            iface = null
+
+            Logx.d(TAG, "VPN interface closed")
+
+        }
+
     }
+
 }

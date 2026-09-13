@@ -7,18 +7,18 @@
     android:layout_height="match_parent"
     android:background="@drawable/bg_screen_ambient">
 
-    <!-- ─────── Top bar: Theme + Config + Split Tunnel ─────── -->
+    <!-- ─────── Top bar: Settings + Config + Split Tunnel ─────── -->
     <ImageView
-        android:id="@+id/btnThemeToggle"
+        android:id="@+id/btnSettings"
         android:layout_width="40dp"
         android:layout_height="40dp"
         android:layout_marginStart="20dp"
         android:padding="9dp"
-        android:src="@drawable/ic_theme"
+        android:src="@drawable/ic_settings"
         android:background="@drawable/bg_config_selector"
         android:clickable="true"
         android:focusable="true"
-        android:contentDescription="@string/theme_toggle"
+        android:contentDescription="@string/settings_title"
         app:tint="@color/text_primary"
         app:layout_constraintTop_toTopOf="@id/configSelector"
         app:layout_constraintBottom_toBottomOf="@id/configSelector"
@@ -36,7 +36,7 @@
         android:clickable="true"
         android:focusable="true"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toEndOf="@id/btnThemeToggle"
+        app:layout_constraintStart_toEndOf="@id/btnSettings"
         app:layout_constraintEnd_toStartOf="@id/btnSplitTunnel">
 
         <View
@@ -166,6 +166,38 @@
                 android:textSize="12sp"
                 android:fontFamily="monospace"
                 tools:text="↓ 0 B/s   ↑ 0 B/s" />
+
+        </LinearLayout>
+
+        <!-- Memory Monitor (RAM Usage) -->
+        <LinearLayout
+            android:id="@+id/memoryContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="3dp"
+            android:background="@drawable/bg_badge_memory"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:layout_marginEnd="5dp"
+                android:src="@drawable/ic_memory"
+                app:tint="@color/text_tertiary"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/memoryText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp"
+                android:fontFamily="sans-serif"
+                tools:text="ОЗУ: 42 МБ" />
 
         </LinearLayout>
 

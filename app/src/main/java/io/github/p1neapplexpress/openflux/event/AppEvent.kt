@@ -6,4 +6,5 @@ sealed interface AppEvent {
     data class SpeedUpdate(val rxSpeed: Long, val txSpeed: Long) : AppEvent
     data object TransportConnected : AppEvent
     data object TransportDisconnected : AppEvent
+    data object VpnDisconnected : AppEvent
 }

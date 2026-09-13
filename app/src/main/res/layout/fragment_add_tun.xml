@@ -173,14 +173,13 @@
                     android:textColor="@color/text_primary"
                     android:textSize="16sp" />
 
-                <com.google.android.material.switchmaterial.SwitchMaterial
+                <com.google.android.material.materialswitch.MaterialSwitch
                     android:id="@+id/debugSwitch"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:checked="false"
                     app:thumbTint="@color/switch_thumb_selector"
-                    app:trackTint="@color/switch_track_selector"
-                    app:useMaterialThemeColors="false" />
+                    app:trackTint="@color/switch_track_selector" />
 
             </LinearLayout>
 

@@ -1,0 +1,75 @@
+﻿package io.github.p1neapplexpress.openflux.service
+
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import io.github.p1neapplexpress.openflux.data.TunnelRepository
+import io.github.p1neapplexpress.openflux.util.AppSettings
+import io.github.p1neapplexpress.openflux.util.Logx
+import io.github.p1neapplexpress.openflux.util.SplitTunnelPreferences
+import io.github.p1neapplexpress.openflux.util.TunnelLinkParser
+import io.github.p1neapplexpress.openflux.vpn.VPNConfig
+import io.github.p1neapplexpress.openflux.vpn.VpnIntentFactory
+
+class BootReceiver : BroadcastReceiver() {
+
+    companion object {
+        private const val TAG = "BootReceiver"
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        val action = intent.action ?: return
+        if (action != Intent.ACTION_BOOT_COMPLETED && action != Intent.ACTION_MY_PACKAGE_REPLACED) {
+            return
+        }
+
+        val appSettings = AppSettings(context)
+        if (!appSettings.autoConnectOnBoot) {
+            Logx.d(TAG, "autoConnectOnBoot is disabled; ignoring boot")
+            return
+        }
+
+        val repo = TunnelRepository(context)
+        val selected = repo.getSelected() ?: run {
+            Logx.w(TAG, "No selected tunnel found for auto-connect on boot")
+            return
+        }
+
+        Logx.i(TAG, "Auto-connecting tunnel '${selected.name}' on device boot")
+        val prepared = TunnelLinkParser.ensureLocalKeyFile(context, selected)
+        val splitPrefs = SplitTunnelPreferences(context)
+        val appBypass = splitPrefs.mode == SplitTunnelPreferences.MODE_BYPASS
+        val selectedApps = if (appBypass) splitPrefs.bypassApps else splitPrefs.proxyApps
+        val perApp = selectedApps.isNotEmpty()
+        val appList = selectedApps.toTypedArray()
+
+        val session = io.github.p1neapplexpress.openflux.util.LocalSocksSession.generateNew()
+        val (remoteHost, remotePort) = io.github.p1neapplexpress.openflux.vpn.TunnelEndpointHelper.extractTarget(prepared)
+        val cfg = VPNConfig(
+            name = prepared.name,
+            port = session.port,
+            username = session.username,
+            password = session.password,
+            dns = appSettings.primaryDns,
+            secondaryDns = appSettings.secondaryDns,
+            mtu = appSettings.mtu,
+            ipv6Proxy = appSettings.ipv6Proxy,
+            perApp = perApp,
+            appBypass = appBypass,
+            appList = appList,
+            bypassLan = appSettings.bypassLan,
+            killSwitch = appSettings.killSwitch,
+            ipType = appSettings.ipType,
+            remoteServer = remoteHost,
+            remotePort = remotePort,
+        )
+
+        val vpnIntent = VpnIntentFactory.build(context, cfg)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(vpnIntent)
+        } else {
+            context.startService(vpnIntent)
+        }
+    }
+}
