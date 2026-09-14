@@ -1,4 +1,4 @@
-﻿package io.github.p1neapplexpress.openflux.service
+package io.github.p1neapplexpress.openflux.service
 
 import android.content.ComponentName
 import android.content.Context
@@ -61,6 +61,15 @@ class FluxonTileService : TileService() {
             startService(disconnectIntent)
             setTileInactive()
         } else {
+            val prepareIntent = android.net.VpnService.prepare(this)
+            if (prepareIntent != null) {
+                val launchIntent = Intent(this, MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivityAndCollapse(launchIntent)
+                return
+            }
+
             val repo = TunnelRepository(this)
             val selected = repo.getSelected()
             if (selected == null) {
@@ -118,7 +127,32 @@ class FluxonTileService : TileService() {
         val appList = selectedApps.toTypedArray()
 
         val appSettings = AppSettings(this)
-        val session = io.github.p1neapplexpress.openflux.util.LocalSocksSession.generateNew()
+        val session = io.github.p1neapplexpress.openflux.util.LocalSocksSession.generateNew(
+            authEnabled = appSettings.socks5AuthEnabled,
+            customUser = appSettings.socks5CustomUser,
+            customPass = appSettings.socks5CustomPass,
+            shareLan = appSettings.shareLanProxy,
+            customPort = if (appSettings.shareLanProxy) appSettings.lanProxyPort else null
+        )
+
+        val modifiedPayload = prepared.transportConnPayload.toMutableList()
+        fun removeFlag(flag: String) {
+            val idx = modifiedPayload.indexOf(flag)
+            if (idx != -1) {
+                if (idx + 1 < modifiedPayload.size) modifiedPayload.removeAt(idx + 1)
+                modifiedPayload.removeAt(idx)
+            }
+        }
+        removeFlag("-socks5")
+        removeFlag("--socks5")
+        removeFlag("-socks5-user")
+        removeFlag("--socks5-user")
+        removeFlag("-socks5-pass")
+        removeFlag("--socks5-pass")
+
+        modifiedPayload.add("--socks5")
+        modifiedPayload.add("127.0.0.1:${session.port}")
+
         val (remoteHost, remotePort) = io.github.p1neapplexpress.openflux.vpn.TunnelEndpointHelper.extractTarget(prepared)
         val cfg = VPNConfig(
             name = prepared.name,
@@ -137,6 +171,8 @@ class FluxonTileService : TileService() {
             ipType = appSettings.ipType,
             remoteServer = remoteHost,
             remotePort = remotePort,
+            transportType = prepared.transportType,
+            transportPayload = modifiedPayload.toTypedArray(),
         )
 
         val intent = VpnIntentFactory.build(this, cfg)

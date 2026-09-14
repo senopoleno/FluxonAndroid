@@ -11,7 +11,9 @@
 
     <string name="yandex_docs_backend">Бэкенд Yandex.Docs</string>
     <string name="vyandex_backend">Бэкенд Yandex.Docs (Volga)</string>
-    <string name="max_messenger_backend">Бэкенд MAX Messenger</string>
+    <string name="max_messenger_backend">Бэкенд Мессенджер MAX</string>
+    <string name="cups_backend">Бэкенд CUPS (Cups.online)</string>
+    <string name="cups_url_hint">Список комнат (Base64) или URL</string>
 
     <string name="starting_transport">Запуск транспорта…</string>
     <string name="starting_tsocks">Запуск tun2socks…</string>

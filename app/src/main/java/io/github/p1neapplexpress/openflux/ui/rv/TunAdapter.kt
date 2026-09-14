@@ -82,6 +82,7 @@ class TunAdapter : RecyclerView.Adapter<TunAdapter.VH>() {
                     TransportType.yandex -> v.context.getString(R.string.yandex_docs_backend)
                     TransportType.vyandex -> v.context.getString(R.string.vyandex_backend)
                     TransportType.max -> v.context.getString(R.string.max_messenger_backend)
+                    TransportType.cups -> v.context.getString(R.string.cups_backend)
                 }
                 stopPulse()
                 dot.isSelected = false

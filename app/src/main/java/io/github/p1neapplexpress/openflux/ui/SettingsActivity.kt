@@ -264,7 +264,17 @@ class SettingsActivity : AppCompatActivity() {
         switchHotspot.setOnCheckedChangeListener { _, isChecked ->
             appSettings.shareLanProxy = isChecked
             if (isChecked) {
+                val session = io.github.p1neapplexpress.openflux.util.LocalSocksSession.getActive()
+                io.github.p1neapplexpress.openflux.service.HotspotProxyBridge.start(
+                    lanPort = appSettings.lanProxyPort,
+                    targetLocalPort = session.port,
+                    authEnabled = appSettings.socks5AuthEnabled,
+                    username = session.username,
+                    password = session.password
+                )
                 showHotspotBottomSheet()
+            } else {
+                io.github.p1neapplexpress.openflux.service.HotspotProxyBridge.stop()
             }
         }
         findViewById<View>(R.id.row_hotspot).setOnClickListener {

@@ -28,6 +28,7 @@ class Tun2SocksLauncher(private val context: Context) {
         username: String?,
         password: String?,
         dns: String,
+        secondaryDns: String? = null,
         dnsPort: Int,
         ipv6: Boolean,
         udpgw: String?,
@@ -49,7 +50,7 @@ class Tun2SocksLauncher(private val context: Context) {
         }
 
         
-        makePdnsdConf(dns, dnsPort)
+        makePdnsdConf(dns, dnsPort, secondaryDns)
         Logx.i(TAG, "starting pdnsd")
         ProcessRunner.execFireAndForget(
             command = listOf(pdnsdBin, "-c", "${context.filesDir}/pdnsd.conf"),
@@ -123,16 +124,30 @@ class Tun2SocksLauncher(private val context: Context) {
         udpgw?.let { add("--udpgw-remote-server-addr"); add(it) }
     }
 
-    private fun makePdnsdConf(dns: String, port: Int) {
+    private fun makePdnsdConf(dns: String, port: Int, secondaryDns: String? = null) {
+        val fallback = if (!secondaryDns.isNullOrBlank() && secondaryDns != dns) {
+            """
+server {
+	label= "fallback";
+	ip = $secondaryDns;
+	port = $port;
+	uptest = none;
+	timeout = 4;
+}
+            """.trimIndent()
+        } else ""
+
         val conf = context.getString(io.github.p1neapplexpress.openflux.R.string.pdnsd_conf)
             .replace("{DIR}", context.filesDir.toString())
             .replace("{IP}", dns)
             .replace("{PORT}", port.toString())
+            .replace("{FALLBACK_SECTION}", fallback)
 
         val f = File(context.filesDir, "pdnsd.conf")
         f.writeText(conf)
 
         val cache = File(context.filesDir, "pdnsd.cache")
-        if (!cache.exists()) cache.createNewFile()
+        if (cache.exists()) cache.delete()
+        cache.createNewFile()
     }
 }

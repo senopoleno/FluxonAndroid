@@ -69,6 +69,7 @@ class SocksVpnService : android.net.VpnService() {
                     username = i.getStringExtra(Constants.INTENT_USERNAME),
                     password = i.getStringExtra(Constants.INTENT_PASSWORD),
                     dns = i.getStringExtra(Constants.INTENT_DNS) ?: "8.8.8.8",
+                    secondaryDns = i.getStringExtra(Constants.INTENT_SECONDARY_DNS),
                     dnsPort = i.getIntExtra(Constants.INTENT_DNS_PORT, 53),
                     ipv6 = i.getBooleanExtra(Constants.INTENT_IPV6_PROXY, false),
                     udpgw = i.getStringExtra(Constants.INTENT_UDP_GW),
@@ -124,6 +125,51 @@ class SocksVpnService : android.net.VpnService() {
         vpn.configure(intent)
         EventBus.dispatch(AppEvent.LogMessage("[S] VPN configured"))
         Logx.i(TAG, "VPN configured")
+
+        val transportType = intent.getStringExtra(Constants.INTENT_TRANSPORT_TYPE)
+        val transportPayload = intent.getStringArrayExtra(Constants.INTENT_TRANSPORT_PAYLOAD)
+        if (!transportType.isNullOrBlank() && transportPayload != null && transportPayload.isNotEmpty()) {
+            serviceScope.launch(Dispatchers.IO) {
+                try {
+                    EventBus.dispatch(AppEvent.LogMessage("[I] Starting native transport ($transportType)..."))
+                    supervisor.start(transportType, transportPayload.toList())
+
+                    var transportReady = false
+                    for (step in 1..40) {
+                        kotlinx.coroutines.delay(250)
+                        if (supervisor.isConnected) {
+                            transportReady = true
+                            Logx.i(TAG, "Transport ready after ${step * 250}ms")
+                            break
+                        }
+                    }
+
+                    if (!transportReady) {
+                        Logx.e(TAG, "Transport failed to start within timeout")
+                        EventBus.dispatch(AppEvent.LogMessage("[E] Transport timeout"))
+                        return@launch
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        binder.startTun2Socks()
+                    }
+
+                    val appSettings = AppSettings(applicationContext)
+                    if (appSettings.shareLanProxy) {
+                        val session = LocalSocksSession.getActive()
+                        HotspotProxyBridge.start(
+                            lanPort = appSettings.lanProxyPort,
+                            targetLocalPort = session.port,
+                            authEnabled = appSettings.socks5AuthEnabled,
+                            username = session.username,
+                            password = session.password
+                        )
+                    }
+                } catch (e: Exception) {
+                    Logx.e(TAG, "Error in automatic service startup", e)
+                }
+            }
+        }
         return START_STICKY
     }
 
@@ -146,35 +192,30 @@ class SocksVpnService : android.net.VpnService() {
         pingJob?.cancel()
         notifications.updatePing(-1L)
         pingJob = serviceScope.launch {
-            val rawHost = lastIntent?.getStringExtra(Constants.INTENT_REMOTE_SERVER)?.trim().orEmpty()
-            val remoteHost = if (rawHost.isNotEmpty() && rawHost != "127.0.0.1" && rawHost != "localhost") {
-                rawHost
-            } else {
-                "1.1.1.1"
-            }
-            val remotePort = lastIntent?.getIntExtra(Constants.INTENT_REMOTE_PORT, 443)?.takeIf { it > 0 } ?: 443
-
+            val port = lastIntent?.getIntExtra(Constants.INTENT_PORT, 1080) ?: 1080
             val pingMs = withContext(Dispatchers.IO) {
                 runCatching {
-                    java.net.Socket().use { s ->
-                        protect(s)
-                        val t0 = android.os.SystemClock.elapsedRealtime()
-                        s.connect(java.net.InetSocketAddress(remoteHost, remotePort), 3000)
-                        (android.os.SystemClock.elapsedRealtime() - t0).coerceAtLeast(1L)
+                    val socksProxy = java.net.Proxy(
+                        java.net.Proxy.Type.SOCKS,
+                        java.net.InetSocketAddress("127.0.0.1", port)
+                    )
+                    val t0 = android.os.SystemClock.elapsedRealtime()
+                    java.net.Socket(socksProxy).use { s ->
+                        s.connect(java.net.InetSocketAddress("1.1.1.1", 80), 3500)
                     }
+                    (android.os.SystemClock.elapsedRealtime() - t0).coerceAtLeast(1L)
                 }.getOrElse {
-                    if (remoteHost != "1.1.1.1") {
-                        runCatching {
-                            java.net.Socket().use { s ->
-                                protect(s)
-                                val t0 = android.os.SystemClock.elapsedRealtime()
-                                s.connect(java.net.InetSocketAddress("1.1.1.1", 443), 3000)
-                                (android.os.SystemClock.elapsedRealtime() - t0).coerceAtLeast(1L)
-                            }
-                        }.getOrDefault(-1L)
-                    } else {
-                        -1L
-                    }
+                    runCatching {
+                        val socksProxy = java.net.Proxy(
+                            java.net.Proxy.Type.SOCKS,
+                            java.net.InetSocketAddress("127.0.0.1", port)
+                        )
+                        val t0 = android.os.SystemClock.elapsedRealtime()
+                        java.net.Socket(socksProxy).use { s ->
+                            s.connect(java.net.InetSocketAddress("8.8.8.8", 53), 3500)
+                        }
+                        (android.os.SystemClock.elapsedRealtime() - t0).coerceAtLeast(1L)
+                    }.getOrDefault(-1L)
                 }
             }
 
@@ -202,6 +243,7 @@ class SocksVpnService : android.net.VpnService() {
         Logx.i(TAG, "stopEverything")
         EventBus.dispatch(AppEvent.VpnDisconnected)
         notifications.stopSpeedUpdates()
+        runCatching { HotspotProxyBridge.stop() }
         runCatching { tun2socks.stop() }
         runCatching { supervisor.stop() }
         runCatching { vpn.stop() }

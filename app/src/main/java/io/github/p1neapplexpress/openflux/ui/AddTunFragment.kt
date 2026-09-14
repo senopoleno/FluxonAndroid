@@ -109,6 +109,13 @@ class AddTunFragment : BaseFragment() {
                     maxToken.setText(argValue(t.transportConnPayload, "--maxToken"))
                     maxUid.setText(argValue(t.transportConnPayload, "--maxUid"))
                 }
+                TransportType.cups -> {
+                    maxContainer.isVisible = false
+                    yandexContainer.isVisible = true
+                    transportLabel.text = getString(R.string.cups_backend)
+                    docUrl.setText(argValue(t.transportConnPayload, "--url"))
+                    yandexContainer.hint = getString(R.string.cups_url_hint)
+                }
             }
 
             val keyFromProp = t.encryptionKey?.trim()
@@ -156,6 +163,16 @@ class AddTunFragment : BaseFragment() {
                     maxContainer.isVisible = true
                     yandexContainer.isVisible = false
                     transportLabel.text = getString(R.string.max_messenger_backend)
+                    yandexContainer.error = null
+                    maxTokenContainer.error = null
+                    maxUserIdContainer.error = null
+                },
+                onCups = {
+                    transport = TransportType.cups
+                    maxContainer.isVisible = false
+                    yandexContainer.isVisible = true
+                    transportLabel.text = getString(R.string.cups_backend)
+                    yandexContainer.hint = getString(R.string.cups_url_hint)
                     yandexContainer.error = null
                     maxTokenContainer.error = null
                     maxUserIdContainer.error = null
@@ -221,6 +238,14 @@ class AddTunFragment : BaseFragment() {
                         return@setOnClickListener
                     }
                     maxUserIdContainer.error = null
+                }
+                TransportType.cups -> {
+                    if (url.isEmpty()) {
+                        yandexContainer.error = getString(R.string.cups_url_hint)
+                        docUrl.requestFocus()
+                        return@setOnClickListener
+                    }
+                    yandexContainer.error = null
                 }
             }
 
@@ -315,6 +340,18 @@ class AddTunFragment : BaseFragment() {
                     if (debug) add("--debug")
                 }
             }
+            TransportType.cups -> {
+                if (docUrl.isEmpty()) return null
+                buildList {
+                    add("--client"); add("--transport"); add("cupsonline")
+                    add("--url"); add(docUrl)
+                    keyFile?.let {
+                        add("--encryption-key-file")
+                        add(it.absolutePath)
+                    }
+                    if (debug) add("--debug")
+                }
+            }
         }
         return Tunnel(
             id = id,
@@ -331,6 +368,7 @@ class AddTunFragment : BaseFragment() {
         onYandex: () -> Unit,
         onVyandex: () -> Unit,
         onMax: () -> Unit,
+        onCups: () -> Unit,
     ) {
         val popupView = LayoutInflater.from(context).inflate(R.layout.dropdown_transport_menu, null)
         val popup = PopupWindow(
@@ -354,6 +392,9 @@ class AddTunFragment : BaseFragment() {
         }
         popupView.findViewById<View>(R.id.option_max)?.setOnClickListener {
             onMax(); popup.dismiss()
+        }
+        popupView.findViewById<View>(R.id.option_cups)?.setOnClickListener {
+            onCups(); popup.dismiss()
         }
 
         popupView.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)

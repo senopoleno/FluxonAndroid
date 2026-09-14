@@ -78,7 +78,24 @@ object LocalSocksSession {
 
     fun getLocalIpAddress(): String {
         try {
-            val interfaces = NetworkInterface.getNetworkInterfaces() ?: return "127.0.0.1"
+            val interfaces = NetworkInterface.getNetworkInterfaces()?.toList() ?: return "192.168.43.1"
+            // First pass: prioritize Wi-Fi SoftAP / hotspot interfaces
+            for (iface in interfaces) {
+                if (iface.isLoopback || !iface.isUp) continue
+                val name = iface.name.lowercase()
+                val isAp = name.contains("ap") || name.contains("rndis") || name.contains("swlan") || name == "wlan1"
+                if (isAp) {
+                    for (addr in iface.inetAddresses) {
+                        if (addr is Inet4Address && !addr.isLoopbackAddress) {
+                            val host = addr.hostAddress ?: continue
+                            if (host.startsWith("192.168.") || host.startsWith("10.") || host.startsWith("172.")) {
+                                return host
+                            }
+                        }
+                    }
+                }
+            }
+            // Second pass: general LAN / WLAN interfaces
             for (iface in interfaces) {
                 if (iface.isLoopback || !iface.isUp) continue
                 for (addr in iface.inetAddresses) {

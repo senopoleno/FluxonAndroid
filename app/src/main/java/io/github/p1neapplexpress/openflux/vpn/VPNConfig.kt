@@ -24,6 +24,8 @@ data class VPNConfig(
     val ipType: Int = 0,
     val remoteServer: String? = null,
     val remotePort: Int = 443,
+    val transportType: String? = null,
+    val transportPayload: Array<String>? = null,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -80,6 +82,9 @@ object TunnelEndpointHelper {
         val transportType = tunnel.transportType.lowercase()
         if (transportType == "max" || transportType == "oneme") {
             return Pair("ws-api.oneme.ru", 443)
+        }
+        if (transportType == "cups" || transportType == "cupsonline") {
+            return Pair("cups.online", 443)
         }
         val urlStr = argValue(tunnel.transportConnPayload, "--url")
         if (urlStr.isNotBlank()) {

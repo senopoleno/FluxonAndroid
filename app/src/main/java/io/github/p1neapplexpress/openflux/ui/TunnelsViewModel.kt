@@ -205,15 +205,8 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         removeFlag("-socks5-pass")
         removeFlag("--socks5-pass")
 
-        val bindHost = if (session.isSharedLan) "0.0.0.0" else "127.0.0.1"
-        modifiedPayload.add("-socks5")
-        modifiedPayload.add("$bindHost:${session.port}")
-        if (session.isAuthEnabled && session.password.isNotEmpty()) {
-            modifiedPayload.add("-socks5-user")
-            modifiedPayload.add(session.username)
-            modifiedPayload.add("-socks5-pass")
-            modifiedPayload.add(session.password)
-        }
+        modifiedPayload.add("--socks5")
+        modifiedPayload.add("127.0.0.1:${session.port}")
 
         val (remoteHost, remotePort) = io.github.p1neapplexpress.openflux.vpn.TunnelEndpointHelper.extractTarget(prepared)
         val cfg = VPNConfig(
@@ -233,6 +226,8 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
             ipType = appSettings.ipType,
             remoteServer = remoteHost,
             remotePort = remotePort,
+            transportType = prepared.transportType,
+            transportPayload = modifiedPayload.toTypedArray(),
         )
         val intent = VpnIntentFactory.build(ctx, cfg)
 
@@ -268,16 +263,19 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
             Logx.i(TAG, "service bound, starting transport")
 
             _active.value = TunnelState.StartingTransport(prepared)
-            try {
-                service?.startOpenFluxNative(
-                    prepared.transportType,
-                    modifiedPayload.toTypedArray()
-                )
-            } catch (e: Exception) {
-                Logx.e(TAG, "startOpenFluxNative failed", e)
-                _active.value = TunnelState.Error("Transport failed: ${e.message}")
-                _tunnelHealth.value = TunnelHealth.UNAVAILABLE
-                return@launch
+            if (service?.isFServiceRunning() != true) {
+                try {
+                    service?.startOpenFluxNative(
+                        prepared.transportType,
+                        modifiedPayload.toTypedArray()
+                    )
+                } catch (e: Exception) {
+                    Logx.e(TAG, "startOpenFluxNative failed", e)
+                    _active.value = TunnelState.Error("Transport failed: ${e.message}")
+                    _tunnelHealth.value = TunnelHealth.UNAVAILABLE
+                    triggerFailoverIfNeeded(tunnel)
+                    return@launch
+                }
             }
 
             var transportReady = false
@@ -297,18 +295,22 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
                 Logx.e(TAG, "transport did not start")
                 _active.value = TunnelState.Error("Transport did not start")
                 _tunnelHealth.value = TunnelHealth.UNAVAILABLE
+                triggerFailoverIfNeeded(tunnel)
                 return@launch
             }
 
             Logx.i(TAG, "starting tun2socks")
             _active.value = TunnelState.StartingTun2Socks(tunnel)
-            try {
-                service?.startTun2Socks()
-            } catch (e: Exception) {
-                Logx.e(TAG, "startTun2Socks failed", e)
-                _active.value = TunnelState.Error("tun2socks failed: ${e.message}")
-                _tunnelHealth.value = TunnelHealth.UNAVAILABLE
-                return@launch
+            if (service?.isVpnRunning() != true) {
+                try {
+                    service?.startTun2Socks()
+                } catch (e: Exception) {
+                    Logx.e(TAG, "startTun2Socks failed", e)
+                    _active.value = TunnelState.Error("tun2socks failed: ${e.message}")
+                    _tunnelHealth.value = TunnelHealth.UNAVAILABLE
+                    triggerFailoverIfNeeded(tunnel)
+                    return@launch
+                }
             }
 
             var vpnReady = false
@@ -324,19 +326,18 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
                     Logx.e(TAG, "isVpnRunning threw", e)
                 }
             }
-
-            if (vpnReady) {
+            if (!vpnReady) {
+                Logx.e(TAG, "tun2socks did not start")
+                _active.value = TunnelState.Error("tun2socks did not start")
+                _tunnelHealth.value = TunnelHealth.UNAVAILABLE
+                triggerFailoverIfNeeded(tunnel)
+                return@launch
+            } else {
                 _active.value = TunnelState.Running(tunnel)
                 _tunnelHealth.value = TunnelHealth.AVAILABLE
                 healthCache[tunnel.id] = TunnelHealth.AVAILABLE
                 _healthMap.value = healthCache.toMap()
                 startUptimeCounter()
-            } else {
-                Logx.e(TAG, "tun2socks did not start")
-                _active.value = TunnelState.Error("tun2socks did not start")
-                _tunnelHealth.value = TunnelHealth.UNAVAILABLE
-                healthCache[tunnel.id] = TunnelHealth.UNAVAILABLE
-                _healthMap.value = healthCache.toMap()
             }
             refresh()
         }
@@ -499,12 +500,12 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         if (!backendOk) return false
 
         // 3. Verify end-to-end connectivity through SOCKS5 proxy
-        io.github.p1neapplexpress.openflux.util.LocalSocksSession.setupAuthenticator(session)
         val socksProxy = java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", session.port))
         val proxyLive = probeLiveConnectivity(socksProxy)
-        if (proxyLive) return true
-
-        // If backend is verified and SOCKS is listening, the transport is ready
+        if (!proxyLive) {
+            triggerFailoverIfNeeded(tunnel)
+            return false
+        }
         return true
     }
 
@@ -537,25 +538,22 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun probeTunnel(tunnel: Tunnel): Boolean {
         val startMs = android.os.SystemClock.elapsedRealtime()
+        val isCurrentRunning = (_active.value is TunnelState.Running) &&
+                (_active.value.tunnel?.id == tunnel.id)
         val success = try {
-            val transportType = tunnel.transportType.lowercase()
-            val target: Pair<String, Int> = if (transportType == "max" || transportType == "oneme") {
-                Pair("ws-api.oneme.ru", 443)
-            } else {
-                val urlStr = argValue(tunnel.transportConnPayload, "--url")
-                if (urlStr.isNotBlank()) {
-                    val uri = java.net.URI(urlStr)
-                    val h = uri.host
-                    val p = if (uri.port > 0) uri.port else if (uri.scheme.equals("https", ignoreCase = true)) 443 else 80
-                    if (!h.isNullOrBlank()) Pair(h, p) else Pair("1.1.1.1", 53)
-                } else {
-                    Pair("1.1.1.1", 53)
+            if (isCurrentRunning) {
+                val session = io.github.p1neapplexpress.openflux.util.LocalSocksSession.getActive()
+                val socksProxy = java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", session.port))
+                java.net.Socket(socksProxy).use { socket ->
+                    socket.connect(java.net.InetSocketAddress("1.1.1.1", 80), 3500)
+                    socket.isConnected
                 }
-            }
-
-            java.net.Socket().use { socket ->
-                socket.connect(java.net.InetSocketAddress(target.first, target.second), 2500)
-                socket.isConnected
+            } else {
+                val target = io.github.p1neapplexpress.openflux.vpn.TunnelEndpointHelper.extractTarget(tunnel)
+                java.net.Socket().use { socket ->
+                    socket.connect(java.net.InetSocketAddress(target.first, target.second), 2500)
+                    socket.isConnected
+                }
             }
         } catch (_: Exception) {
             false

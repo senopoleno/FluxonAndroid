@@ -12,6 +12,8 @@
     <string name="yandex_docs_backend">Yandex.Docs backend</string>
     <string name="vyandex_backend">Yandex.Docs backend (Volga)</string>
     <string name="max_messenger_backend">MAX Messenger backend</string>
+    <string name="cups_backend">CUPS (Cups.online) backend</string>
+    <string name="cups_url_hint">Base64 room list or URL</string>
 
     <string name="starting_transport">Starting transport…</string>
     <string name="starting_tsocks">Starting tun2socks…</string>

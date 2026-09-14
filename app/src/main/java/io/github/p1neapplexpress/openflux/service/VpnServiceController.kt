@@ -96,24 +96,20 @@ class VpnServiceController(private val service: VpnService) {
 
             .addDnsServer(secDns)
 
-        // killSwitch is handled by VPN routing without blocking TUN FD
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            builder.setBlocking(killSwitch)
+        }
 
         when (ipType) {
-
             AppSettings.IP_TYPE_IPV4 -> {
-
                 builder.addAddress(VPN_IPV4_ADDR, VPN_IPV4_PREFIX)
-
                 Routes.addRoutes(service, builder, route, bypassLan)
-
             }
-
             AppSettings.IP_TYPE_IPV6 -> {
-
+                // Assign local IPv4 for tun2socks/pdnsd dns gateway, but route all external traffic over IPv6
+                builder.addAddress(VPN_IPV4_ADDR, VPN_IPV4_PREFIX)
                 builder.addAddress(VPN_IPV6_ADDR, VPN_IPV6_PREFIX)
-
                     .addRoute("::", 0)
-
             }
 
             else -> { // Auto / Dual-stack

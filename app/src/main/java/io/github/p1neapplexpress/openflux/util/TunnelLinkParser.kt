@@ -133,6 +133,60 @@ object TunnelLinkParser {
             }
         }
 
+        // Smart parser: CLI arguments or raw URLs
+        if (tunnel == null) {
+            if (trimmed.contains("--transport") || trimmed.contains("--url")) {
+                val tokens = trimmed.split(Regex("\\s+"))
+                fun getArg(name: String): String? {
+                    val idx = tokens.indexOf(name)
+                    return if (idx >= 0 && idx + 1 < tokens.size) tokens[idx + 1].trim('"', '\'') else null
+                }
+                val rawTransport = getArg("--transport") ?: "yandex"
+                val transType = io.github.p1neapplexpress.openflux.data.TransportType.from(rawTransport)
+                val url = getArg("--url").orEmpty()
+                val token = getArg("--maxToken").orEmpty()
+                val uid = getArg("--maxUid").orEmpty()
+                val key = getArg("--encryption-key-file").orEmpty()
+                val isDebug = tokens.contains("--debug")
+
+                val payload = buildList {
+                    add("--client")
+                    add("--transport")
+                    add(if (transType == io.github.p1neapplexpress.openflux.data.TransportType.cups) "cupsonline" else if (transType == io.github.p1neapplexpress.openflux.data.TransportType.max) "oneme" else transType.name)
+                    if (url.isNotEmpty()) { add("--url"); add(url) }
+                    if (token.isNotEmpty()) { add("--maxToken"); add(token) }
+                    if (uid.isNotEmpty()) { add("--maxUid"); add(uid) }
+                    if (isDebug) add("--debug")
+                }
+                tunnel = Tunnel(
+                    id = System.currentTimeMillis(),
+                    name = when (transType) {
+                        io.github.p1neapplexpress.openflux.data.TransportType.cups -> "CUPS Tunnel"
+                        io.github.p1neapplexpress.openflux.data.TransportType.max -> "MAX Tunnel"
+                        io.github.p1neapplexpress.openflux.data.TransportType.vyandex -> "Yandex Volga"
+                        else -> "Yandex Docs"
+                    },
+                    transportType = transType.name,
+                    transportConnPayload = payload,
+                    encryptionKey = null
+                )
+            } else if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {
+                val isCups = trimmed.contains("cups.online", ignoreCase = true)
+                val transType = if (isCups) io.github.p1neapplexpress.openflux.data.TransportType.cups else io.github.p1neapplexpress.openflux.data.TransportType.yandex
+                tunnel = Tunnel(
+                    id = System.currentTimeMillis(),
+                    name = if (isCups) "CUPS Tunnel" else "Yandex Docs",
+                    transportType = transType.name,
+                    transportConnPayload = listOf(
+                        "--client",
+                        "--transport", if (isCups) "cupsonline" else "yandex",
+                        "--url", trimmed
+                    ),
+                    encryptionKey = null
+                )
+            }
+        }
+
         return if (tunnel != null && context != null) {
             ensureLocalKeyFile(context, tunnel)
         } else {

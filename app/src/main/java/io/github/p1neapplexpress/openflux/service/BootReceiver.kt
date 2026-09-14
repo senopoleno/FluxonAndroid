@@ -1,4 +1,4 @@
-﻿package io.github.p1neapplexpress.openflux.service
+package io.github.p1neapplexpress.openflux.service
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -44,7 +44,32 @@ class BootReceiver : BroadcastReceiver() {
         val perApp = selectedApps.isNotEmpty()
         val appList = selectedApps.toTypedArray()
 
-        val session = io.github.p1neapplexpress.openflux.util.LocalSocksSession.generateNew()
+        val session = io.github.p1neapplexpress.openflux.util.LocalSocksSession.generateNew(
+            authEnabled = appSettings.socks5AuthEnabled,
+            customUser = appSettings.socks5CustomUser,
+            customPass = appSettings.socks5CustomPass,
+            shareLan = appSettings.shareLanProxy,
+            customPort = if (appSettings.shareLanProxy) appSettings.lanProxyPort else null
+        )
+
+        val modifiedPayload = prepared.transportConnPayload.toMutableList()
+        fun removeFlag(flag: String) {
+            val idx = modifiedPayload.indexOf(flag)
+            if (idx != -1) {
+                if (idx + 1 < modifiedPayload.size) modifiedPayload.removeAt(idx + 1)
+                modifiedPayload.removeAt(idx)
+            }
+        }
+        removeFlag("-socks5")
+        removeFlag("--socks5")
+        removeFlag("-socks5-user")
+        removeFlag("--socks5-user")
+        removeFlag("-socks5-pass")
+        removeFlag("--socks5-pass")
+
+        modifiedPayload.add("--socks5")
+        modifiedPayload.add("127.0.0.1:${session.port}")
+
         val (remoteHost, remotePort) = io.github.p1neapplexpress.openflux.vpn.TunnelEndpointHelper.extractTarget(prepared)
         val cfg = VPNConfig(
             name = prepared.name,
@@ -63,6 +88,8 @@ class BootReceiver : BroadcastReceiver() {
             ipType = appSettings.ipType,
             remoteServer = remoteHost,
             remotePort = remotePort,
+            transportType = prepared.transportType,
+            transportPayload = modifiedPayload.toTypedArray(),
         )
 
         val vpnIntent = VpnIntentFactory.build(context, cfg)

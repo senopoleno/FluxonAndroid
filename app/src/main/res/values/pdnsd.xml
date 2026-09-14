@@ -23,13 +23,7 @@ server {
 	timeout = 4;
 }
 
-server {
-	label= "fallback";
-	ip = 1.1.1.1;
-	port = 53;
-	uptest = none;
-	timeout = 4;
-}
+{FALLBACK_SECTION}
 
 rr {
 	name=localhost;
