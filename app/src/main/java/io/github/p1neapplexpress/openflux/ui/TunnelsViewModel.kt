@@ -94,13 +94,27 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
 
     private val healthCache = ConcurrentHashMap<Long, TunnelHealth>()
 
-    fun getTunnelHealth(tunnelId: Long): TunnelHealth = healthCache[tunnelId] ?: TunnelHealth.UNKNOWN
+    fun getTunnelHealth(tunnelId: Long): TunnelHealth {
+        val running = (_active.value as? TunnelState.Running)?.tunnel
+        return if (running != null && running.id == tunnelId) {
+            _tunnelHealth.value
+        } else {
+            healthCache[tunnelId] ?: TunnelHealth.UNKNOWN
+        }
+    }
 
     private val _pingMap = MutableStateFlow<Map<Long, Long>>(emptyMap())
     val pingMap: StateFlow<Map<Long, Long>> = _pingMap.asStateFlow()
     private val pingCache = ConcurrentHashMap<Long, Long>()
 
-    fun getTunnelPing(tunnelId: Long): Long? = pingCache[tunnelId]
+    fun getTunnelPing(tunnelId: Long): Long? {
+        val running = (_active.value as? TunnelState.Running)?.tunnel
+        return if (running != null && running.id == tunnelId) {
+            pingCache[tunnelId]
+        } else {
+            null
+        }
+    }
 
     private val _selected = MutableStateFlow<Tunnel?>(null)
     val selected: StateFlow<Tunnel?> = _selected.asStateFlow()
@@ -122,8 +136,15 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
                     is AppEvent.TransportDisconnected -> {
                         if (_active.value.isActive) {
                             Logx.e(TAG, "Transport disconnected event received")
+                            val cur = _active.value.tunnel
                             _active.value = TunnelState.Error("Transport disconnected")
                             _tunnelHealth.value = TunnelHealth.UNAVAILABLE
+                            if (cur != null) {
+                                healthCache[cur.id] = TunnelHealth.UNAVAILABLE
+                                pingCache.remove(cur.id)
+                                _healthMap.value = healthCache.toMap()
+                                _pingMap.value = pingCache.toMap()
+                            }
                             stopUptimeCounter()
                             refresh()
                         }
@@ -140,6 +161,13 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
                             _rxSpeed.value = 0L
                             _txSpeed.value = 0L
                             stopUptimeCounter()
+                            healthCheckJob?.cancel()
+                            healthCheckJob = null
+                            healthCache.clear()
+                            pingCache.clear()
+                            _tunnelHealth.value = TunnelHealth.UNKNOWN
+                            _healthMap.value = emptyMap()
+                            _pingMap.value = emptyMap()
                             refresh()
                         }
                     }
@@ -379,6 +407,13 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         _rxSpeed.value = 0L
         _txSpeed.value = 0L
         stopUptimeCounter()
+        healthCheckJob?.cancel()
+        healthCheckJob = null
+        healthCache.clear()
+        pingCache.clear()
+        _tunnelHealth.value = TunnelHealth.UNKNOWN
+        _healthMap.value = emptyMap()
+        _pingMap.value = emptyMap()
         refresh()
     }
 
@@ -395,28 +430,38 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         _tunnels.value = list.map { TunnelViewType(it, enabled = it == running) }
         val sel = repo.getSelected()
         _selected.value = sel
-        checkTunnelHealth(running ?: sel)
+        if (running != null) {
+            checkTunnelHealth(running)
+        } else {
+            _tunnelHealth.value = TunnelHealth.UNKNOWN
+            healthCache.clear()
+            pingCache.clear()
+            _healthMap.value = emptyMap()
+            _pingMap.value = emptyMap()
+        }
         probeAllTunnels()
     }
 
     fun probeAllTunnels() {
+        val running = (_active.value as? TunnelState.Running)?.tunnel
         val tunnels = repo.load()
-        val runningId = (_active.value as? TunnelState.Running)?.tunnel?.id
-        viewModelScope.launch(Dispatchers.IO) {
-            coroutineScope {
-                tunnels.map { t ->
-                    async {
-                        if (t.id == runningId) {
-                            healthCache[t.id] = _tunnelHealth.value
-                        } else {
-                            val ok = probeTunnel(t)
-                            healthCache[t.id] = if (ok) TunnelHealth.AVAILABLE else TunnelHealth.UNAVAILABLE
-                        }
-                    }
-                }.awaitAll()
+        for (t in tunnels) {
+            if (t.id != running?.id) {
+                healthCache[t.id] = TunnelHealth.UNKNOWN
+                pingCache.remove(t.id)
             }
-            _healthMap.value = healthCache.toMap()
-            _pingMap.value = pingCache.toMap()
+        }
+        _healthMap.value = healthCache.toMap()
+        _pingMap.value = pingCache.toMap()
+
+        if (running != null) {
+            viewModelScope.launch(Dispatchers.IO) {
+                val ok = checkRunningHealthInternal(running)
+                val status = if (ok) TunnelHealth.AVAILABLE else TunnelHealth.UNAVAILABLE
+                healthCache[running.id] = status
+                _tunnelHealth.value = status
+                _healthMap.value = healthCache.toMap()
+            }
         }
     }
 
@@ -426,19 +471,16 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         }
         repo.setSelectedId(tunnel.id)
         _selected.value = tunnel
-        checkTunnelHealth(tunnel, force = true)
+        _tunnelHealth.value = TunnelHealth.UNKNOWN
+        healthCache[tunnel.id] = TunnelHealth.UNKNOWN
+        _healthMap.value = healthCache.toMap()
+        pingCache.remove(tunnel.id)
+        _pingMap.value = pingCache.toMap()
     }
 
     fun checkSelectedHealth(force: Boolean = false) {
         val running = (_active.value as? TunnelState.Running)?.tunnel
         val target = running ?: _selected.value ?: repo.getSelected()
-        if (!force && target != null && healthCache.containsKey(target.id) && _active.value !is TunnelState.Running) {
-            _tunnelHealth.value = healthCache[target.id] ?: TunnelHealth.UNKNOWN
-            return
-        }
-        if (_active.value is TunnelState.Running) {
-            if (!force) return
-        }
         checkTunnelHealth(target, force = force)
     }
 
@@ -448,32 +490,25 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
             _tunnelHealth.value = TunnelHealth.UNKNOWN
             return
         }
-        if (!force && healthCache.containsKey(tunnel.id) && _active.value !is TunnelState.Running) {
-            _tunnelHealth.value = healthCache[tunnel.id] ?: TunnelHealth.UNKNOWN
-            return
-        }
-        if (_active.value is TunnelState.Running && _active.value.tunnel?.id == tunnel.id) {
-            if (!force) {
-                _tunnelHealth.value = healthCache[tunnel.id] ?: TunnelHealth.AVAILABLE
-                return
+        val running = (_active.value as? TunnelState.Running)?.tunnel
+        if (running != null && running.id == tunnel.id) {
+            _tunnelHealth.value = healthCache[tunnel.id] ?: TunnelHealth.CHECKING
+            if (force || !healthCache.containsKey(tunnel.id)) {
+                _tunnelHealth.value = TunnelHealth.CHECKING
+                healthCheckJob = viewModelScope.launch(Dispatchers.IO) {
+                    val ok = checkRunningHealthInternal(tunnel)
+                    val status = if (ok) TunnelHealth.AVAILABLE else TunnelHealth.UNAVAILABLE
+                    healthCache[tunnel.id] = status
+                    _tunnelHealth.value = status
+                    _healthMap.value = healthCache.toMap()
+                }
             }
-            _tunnelHealth.value = TunnelHealth.CHECKING
-            healthCheckJob = viewModelScope.launch(Dispatchers.IO) {
-                val isAvailable = probeRunningTunnel(tunnel)
-                val status = if (isAvailable) TunnelHealth.AVAILABLE else TunnelHealth.UNAVAILABLE
-                healthCache[tunnel.id] = status
-                _tunnelHealth.value = status
-                _healthMap.value = healthCache.toMap()
-            }
-            return
-        }
-        _tunnelHealth.value = TunnelHealth.CHECKING
-        healthCheckJob = viewModelScope.launch(Dispatchers.IO) {
-            val isAvailable = probeTunnel(tunnel)
-            val status = if (isAvailable) TunnelHealth.AVAILABLE else TunnelHealth.UNAVAILABLE
-            healthCache[tunnel.id] = status
-            _tunnelHealth.value = status
+        } else {
+            _tunnelHealth.value = TunnelHealth.UNKNOWN
+            healthCache[tunnel.id] = TunnelHealth.UNKNOWN
             _healthMap.value = healthCache.toMap()
+            pingCache.remove(tunnel.id)
+            _pingMap.value = pingCache.toMap()
         }
     }
 
@@ -491,11 +526,21 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun checkRunningHealthInternal(tunnel: Tunnel): Boolean {
         if (service?.isFServiceRunning() != true || service?.isVpnRunning() != true) {
+            healthCache[tunnel.id] = TunnelHealth.UNAVAILABLE
+            _tunnelHealth.value = TunnelHealth.UNAVAILABLE
+            _healthMap.value = healthCache.toMap()
+            pingCache.remove(tunnel.id)
+            _pingMap.value = pingCache.toMap()
             return false
         }
 
         val session = io.github.p1neapplexpress.openflux.util.LocalSocksSession.getActive()
         if (session.port !in 1..65535) {
+            healthCache[tunnel.id] = TunnelHealth.UNAVAILABLE
+            _tunnelHealth.value = TunnelHealth.UNAVAILABLE
+            _healthMap.value = healthCache.toMap()
+            pingCache.remove(tunnel.id)
+            _pingMap.value = pingCache.toMap()
             return false
         }
 
@@ -511,6 +556,7 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         if (!socksPortOpen) {
             healthCache[tunnel.id] = TunnelHealth.UNAVAILABLE
             _tunnelHealth.value = TunnelHealth.UNAVAILABLE
+            _healthMap.value = healthCache.toMap()
             pingCache.remove(tunnel.id)
             _pingMap.value = pingCache.toMap()
             triggerFailoverIfNeeded(tunnel)
@@ -523,6 +569,7 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         if (latency < 0) {
             healthCache[tunnel.id] = TunnelHealth.UNAVAILABLE
             _tunnelHealth.value = TunnelHealth.UNAVAILABLE
+            _healthMap.value = healthCache.toMap()
             pingCache.remove(tunnel.id)
             _pingMap.value = pingCache.toMap()
             triggerFailoverIfNeeded(tunnel)
@@ -533,6 +580,7 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         _pingMap.value = pingCache.toMap()
         healthCache[tunnel.id] = TunnelHealth.AVAILABLE
         _tunnelHealth.value = TunnelHealth.AVAILABLE
+        _healthMap.value = healthCache.toMap()
         return true
     }
 
@@ -566,46 +614,6 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         return -1L
-    }
-
-    private fun probeTunnel(tunnel: Tunnel): Boolean {
-        val isCurrentRunning = (_active.value is TunnelState.Running) &&
-                (_active.value.tunnel?.id == tunnel.id)
-        return if (isCurrentRunning) {
-            val session = io.github.p1neapplexpress.openflux.util.LocalSocksSession.getActive()
-            val socksProxy = java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", session.port))
-            val latency = probeLiveConnectivityWithLatency(socksProxy)
-            if (latency > 0) {
-                pingCache[tunnel.id] = latency
-                _pingMap.value = pingCache.toMap()
-                true
-            } else {
-                pingCache.remove(tunnel.id)
-                _pingMap.value = pingCache.toMap()
-                false
-            }
-        } else {
-            val target = io.github.p1neapplexpress.openflux.vpn.TunnelEndpointHelper.extractTarget(tunnel)
-            val startMs = android.os.SystemClock.elapsedRealtime()
-            val reachable = try {
-                java.net.Socket().use { socket ->
-                    socket.connect(java.net.InetSocketAddress(target.first, target.second), 2500)
-                    socket.isConnected
-                }
-            } catch (_: Exception) {
-                false
-            }
-            if (reachable) {
-                val latency = (android.os.SystemClock.elapsedRealtime() - startMs).coerceAtLeast(1L)
-                pingCache[tunnel.id] = latency
-                _pingMap.value = pingCache.toMap()
-                true
-            } else {
-                pingCache.remove(tunnel.id)
-                _pingMap.value = pingCache.toMap()
-                false
-            }
-        }
     }
 
     private fun triggerFailoverIfNeeded(failedTunnel: Tunnel) {
@@ -642,6 +650,7 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         val prepared = TunnelLinkParser.ensureLocalKeyFile(getApplication(), uniqueTunnel)
         current.add(prepared)
         repo.save(current)
+        repo.setSelectedId(prepared.id)
         refresh()
     }
 
@@ -693,6 +702,8 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
                                 _tunnelHealth.value = TunnelHealth.UNAVAILABLE
                                 healthCache[currentTunnel.id] = TunnelHealth.UNAVAILABLE
                                 _healthMap.value = healthCache.toMap()
+                                pingCache.remove(currentTunnel.id)
+                                _pingMap.value = pingCache.toMap()
                             }
                         }
                     }

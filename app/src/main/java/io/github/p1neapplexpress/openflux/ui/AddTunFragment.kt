@@ -135,7 +135,7 @@ class AddTunFragment : BaseFragment() {
 
             debug = t.transportConnPayload.contains("--debug")
             debugSwitch.isChecked = debug
-            save.text = getString(R.string.action_edit)
+            save.text = getString(R.string.save)
         }
 
         transportLayout.setOnClickListener {

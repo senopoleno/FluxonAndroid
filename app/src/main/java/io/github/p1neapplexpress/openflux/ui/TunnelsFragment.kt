@@ -98,7 +98,6 @@ class TunnelsFragment : BaseFragment() {
         val tunnel = TunnelLinkParser.parse(raw, requireContext())
         if (tunnel != null) {
             vm.addTunnel(tunnel)
-            vm.startTunnel(tunnel)
             Toast.makeText(requireContext(), R.string.config_saved, Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(requireContext(), R.string.qr_scan_failed, Toast.LENGTH_LONG).show()
@@ -114,7 +113,6 @@ class TunnelsFragment : BaseFragment() {
                 val tunnel = if (decoded != null) TunnelLinkParser.parse(decoded, ctx) else null
                 if (tunnel != null) {
                     vm.addTunnel(tunnel)
-                    vm.startTunnel(tunnel)
                     Toast.makeText(ctx, R.string.config_saved, Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(ctx, R.string.qr_scan_failed, Toast.LENGTH_LONG).show()
@@ -178,7 +176,6 @@ class TunnelsFragment : BaseFragment() {
             if (tunnel != null) {
                 dialog.dismiss()
                 vm.addTunnel(tunnel)
-                vm.startTunnel(tunnel)
                 Toast.makeText(context, R.string.config_saved, Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(context, R.string.import_link_invalid, Toast.LENGTH_LONG).show()
@@ -478,16 +475,16 @@ class TunnelsFragment : BaseFragment() {
         val dropdownCollectorsJob = viewLifecycleOwner.lifecycleScope.launch {
             launch {
                 vm.healthMap.collect { map ->
-                    for ((id, h) in map) {
-                        val d = rowDots[id] ?: continue
+                    for ((id, d) in rowDots) {
+                        val h = map[id] ?: vm.getTunnelHealth(id)
                         tintDot(d, h)
                     }
                 }
             }
             launch {
                 vm.pingMap.collect { map ->
-                    for ((id, ping) in map) {
-                        val pv = rowPings[id] ?: continue
+                    for ((id, pv) in rowPings) {
+                        val ping = map[id]
                         updatePingView(pv, ping)
                     }
                 }
