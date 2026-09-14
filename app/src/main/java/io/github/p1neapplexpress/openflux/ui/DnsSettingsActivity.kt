@@ -38,9 +38,9 @@ class DnsSettingsActivity : AppCompatActivity() {
     private lateinit var inputCustomDnsSecondary: TextInputEditText
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         val themePrefs = ThemePreferences(this)
         themePrefs.applyTheme()
-        super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_dns_settings)
 
         appSettings = AppSettings(this)

@@ -75,13 +75,18 @@ class VpnNotificationManager(private val service: Service) {
 
             val elapsedMs = (now - lastSampleAt).coerceAtLeast(1)
 
-            val rxBytes = TrafficStats.getUidRxBytes(uid).coerceAtLeast(0)
+            val rawRx = TrafficStats.getUidRxBytes(uid)
+            val rawTx = TrafficStats.getUidTxBytes(uid)
+            val rxBytes = if (rawRx != TrafficStats.UNSUPPORTED.toLong()) rawRx else lastRxBytes
+            val txBytes = if (rawTx != TrafficStats.UNSUPPORTED.toLong()) rawTx else lastTxBytes
 
-            val txBytes = TrafficStats.getUidTxBytes(uid).coerceAtLeast(0)
+            val rxPerSec = if (lastRxBytes > 0 && rxBytes >= lastRxBytes) {
+                (rxBytes - lastRxBytes) * 1000 / elapsedMs
+            } else 0L
 
-            val rxPerSec = (rxBytes - lastRxBytes) * 1000 / elapsedMs
-
-            val txPerSec = (txBytes - lastTxBytes) * 1000 / elapsedMs
+            val txPerSec = if (lastTxBytes > 0 && txBytes >= lastTxBytes) {
+                (txBytes - lastTxBytes) * 1000 / elapsedMs
+            } else 0L
 
             lastRxBytes = rxBytes
 

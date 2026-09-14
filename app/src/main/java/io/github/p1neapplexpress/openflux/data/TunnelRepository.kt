@@ -9,18 +9,22 @@ import kotlinx.serialization.json.Json
 
 class TunnelRepository(context: Context) {
 
+    companion object {
+        private val lock = Any()
+    }
+
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences(Constants.PREF, Context.MODE_PRIVATE)
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    fun load(): List<Tunnel> {
+    fun load(): List<Tunnel> = synchronized(lock) {
         val raw = prefs.getString(Constants.PREF_TUNNELS_KEY, null) ?: return emptyList()
         return runCatching { json.decodeFromString<List<Tunnel>>(raw) }
             .getOrElse { emptyList() }
     }
 
-    fun save(tunnels: List<Tunnel>) {
+    fun save(tunnels: List<Tunnel>) = synchronized(lock) {
         prefs.edit {
             putString(Constants.PREF_TUNNELS_KEY, json.encodeToString(tunnels))
         }

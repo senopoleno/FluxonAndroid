@@ -46,8 +46,8 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = TunnelRepository(app)
 
-    private var service: IUnifiedService? = null
-    private var bound = false
+    @Volatile private var service: IUnifiedService? = null
+    @Volatile private var bound = false
     private var activeTunnelData: Tunnel? = null
 
     private val connection = object : ServiceConnection {
@@ -495,6 +495,9 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         val session = io.github.p1neapplexpress.openflux.util.LocalSocksSession.getActive()
+        if (session.port !in 1..65535) {
+            return false
+        }
 
         // 1. Verify that the local SOCKS proxy is listening and responsive
         val socksPortOpen = try {
@@ -708,6 +711,8 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         super.onCleared()
         stopUptimeCounter()
+        healthCheckJob?.cancel()
+        healthCheckJob = null
         try { getApplication<Application>().unbindService(connection) } catch (_: Exception) {}
     }
 }

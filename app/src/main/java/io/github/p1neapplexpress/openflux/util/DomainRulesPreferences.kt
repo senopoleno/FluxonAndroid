@@ -13,7 +13,7 @@ class DomainRulesPreferences(context: Context) {
         const val MODE_BYPASS = 0
         const val MODE_PROXY = 1
 
-        private val cache = mutableMapOf<String, Set<String>>()
+        private val cache = java.util.concurrent.ConcurrentHashMap<String, Set<String>>()
 
         private fun loadAssetPreset(context: Context, filename: String, fallback: Set<String>): Set<String> {
             val cached = cache[filename]
@@ -124,7 +124,7 @@ class DomainRulesPreferences(context: Context) {
         set(value) = prefs.edit().putInt(KEY_MODE, value).apply()
 
     var domains: Set<String>
-        get() = prefs.getStringSet(KEY_DOMAINS, emptySet()) ?: emptySet()
+        get() = prefs.getStringSet(KEY_DOMAINS, emptySet())?.toSet() ?: emptySet()
         set(value) = prefs.edit().putStringSet(KEY_DOMAINS, value).apply()
 
     fun addDomain(domain: String): Boolean {

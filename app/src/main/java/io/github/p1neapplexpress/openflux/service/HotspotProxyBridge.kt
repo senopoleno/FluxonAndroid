@@ -22,6 +22,7 @@ object HotspotProxyBridge {
     private var serverSocket: ServerSocket? = null
     private var executor: ExecutorService? = null
 
+    @Synchronized
     fun start(
         lanPort: Int,
         targetLocalPort: Int,
@@ -29,11 +30,11 @@ object HotspotProxyBridge {
         username: String = "",
         password: String = ""
     ) {
-        if (isRunning.getAndSet(true)) {
+        if (isRunning.get()) {
             Logx.d(TAG, "Bridge already running, stopping existing instance first")
             stop()
-            isRunning.set(true)
         }
+        isRunning.set(true)
 
         try {
             val sSocket = ServerSocket(lanPort, 50, InetAddress.getByName("0.0.0.0"))
@@ -65,6 +66,7 @@ object HotspotProxyBridge {
         }
     }
 
+    @Synchronized
     fun stop() {
         if (!isRunning.getAndSet(false)) return
         Logx.i(TAG, "Stopping hotspot proxy bridge")
@@ -163,14 +165,28 @@ object HotspotProxyBridge {
             val tVer = tin.read()
             val tMethod = tin.read()
             if (tVer != 0x05 || tMethod != 0x00) {
-                targetSocket.close()
-                clientSocket.close()
+                runCatching { targetSocket.close() }
+                runCatching { clientSocket.close() }
                 return
             }
 
             // 3. Bidirectional pipe between client and local SOCKS5 proxy
-            val t1 = Thread({ pipe(cin, tout) }, "HotspotBridge-ClientToTarget")
-            val t2 = Thread({ pipe(tin, cout) }, "HotspotBridge-TargetToClient")
+            val t1 = Thread({
+                try {
+                    pipe(cin, tout)
+                } finally {
+                    runCatching { targetSocket.close() }
+                    runCatching { clientSocket.close() }
+                }
+            }, "HotspotBridge-ClientToTarget")
+            val t2 = Thread({
+                try {
+                    pipe(tin, cout)
+                } finally {
+                    runCatching { clientSocket.close() }
+                    runCatching { targetSocket.close() }
+                }
+            }, "HotspotBridge-TargetToClient")
             t1.isDaemon = true
             t2.isDaemon = true
             t1.start()

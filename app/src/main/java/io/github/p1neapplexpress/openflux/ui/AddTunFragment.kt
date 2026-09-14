@@ -296,15 +296,23 @@ class AddTunFragment : BaseFragment() {
         maxUid: String,
         encKey: String = "",
     ): Tunnel? {
+        when (transport) {
+            TransportType.yandex, TransportType.vyandex, TransportType.cups -> {
+                if (docUrl.isEmpty()) return null
+            }
+            TransportType.max -> {
+                if (maxToken.isEmpty() || maxUid.isEmpty()) return null
+            }
+        }
+
         val keyFile = if (encKey.isNotEmpty()) {
             val f = File(requireContext().filesDir, "key_${id}.txt")
-            f.writeText(encKey)
+            runCatching { f.writeText(encKey) }
             f
         } else null
 
         val payload = when (transport) {
             TransportType.yandex -> {
-                if (docUrl.isEmpty()) return null
                 buildList {
                     add("--client"); add("--transport"); add("yandex")
                     add("--url"); add(docUrl)
@@ -316,7 +324,6 @@ class AddTunFragment : BaseFragment() {
                 }
             }
             TransportType.vyandex -> {
-                if (docUrl.isEmpty()) return null
                 buildList {
                     add("--client"); add("--transport"); add("vyandex")
                     add("--url"); add(docUrl)
@@ -328,7 +335,6 @@ class AddTunFragment : BaseFragment() {
                 }
             }
             TransportType.max -> {
-                if (maxToken.isEmpty() || maxUid.isEmpty()) return null
                 buildList {
                     add("--client"); add("--transport"); add("oneme")
                     add("--maxToken"); add(maxToken)
@@ -341,7 +347,6 @@ class AddTunFragment : BaseFragment() {
                 }
             }
             TransportType.cups -> {
-                if (docUrl.isEmpty()) return null
                 buildList {
                     add("--client"); add("--transport"); add("cupsonline")
                     add("--url"); add(docUrl)

@@ -360,16 +360,18 @@ class TunnelsFragment : BaseFragment() {
         val rowPings = mutableMapOf<Long, TextView>()
 
         fun tintDot(dot: View, health: TunnelHealth) {
+            val ctx = context ?: return
             val colorRes = when (health) {
                 TunnelHealth.AVAILABLE -> R.color.state_running
                 TunnelHealth.UNAVAILABLE -> R.color.state_error
                 TunnelHealth.CHECKING -> R.color.state_connecting
                 TunnelHealth.UNKNOWN -> R.color.state_idle
             }
-            dot.background?.setTint(ContextCompat.getColor(requireContext(), colorRes))
+            dot.background?.setTint(ContextCompat.getColor(ctx, colorRes))
         }
 
         fun updatePingView(pingView: TextView, ping: Long?) {
+            val ctx = context ?: return
             if (ping != null && ping > 0) {
                 pingView.isVisible = true
                 pingView.text = getString(R.string.ping_ms_format, ping)
@@ -378,7 +380,7 @@ class TunnelsFragment : BaseFragment() {
                     ping < 350 -> R.color.state_connecting
                     else -> R.color.state_error
                 }
-                pingView.setTextColor(ContextCompat.getColor(requireContext(), colorRes))
+                pingView.setTextColor(ContextCompat.getColor(ctx, colorRes))
             } else {
                 pingView.isVisible = false
             }
@@ -464,7 +466,12 @@ class TunnelsFragment : BaseFragment() {
         content.scaleY = 0.88f
         content.translationY = -16f
 
-        pw.showAtLocation(anchor, android.view.Gravity.NO_GRAVITY, targetX, targetY)
+        try {
+            pw.showAtLocation(anchor, android.view.Gravity.NO_GRAVITY, targetX, targetY)
+        } catch (_: Exception) {
+            popup = null
+            return
+        }
 
         content.animate()
             .alpha(1f)

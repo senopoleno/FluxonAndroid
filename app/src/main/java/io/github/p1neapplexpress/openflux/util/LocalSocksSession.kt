@@ -27,7 +27,7 @@ object LocalSocksSession {
         port = 1080,
         username = generateRandomUsername(),
         password = "",
-        isAuthEnabled = true,
+        isAuthEnabled = false,
         isSharedLan = false
     )
 

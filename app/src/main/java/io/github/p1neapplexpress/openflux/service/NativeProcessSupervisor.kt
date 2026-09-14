@@ -21,6 +21,7 @@ class NativeProcessSupervisor(private val context: Context) {
     private val handler = Handler(Looper.getMainLooper())
     @Volatile private var process: Process? = null
     @Volatile private var stdoutThread: Thread? = null
+    @Volatile private var gracePeriodRunnable: Runnable? = null
 
     private val running = AtomicBoolean(false)
     private val connected = AtomicBoolean(false)
@@ -70,12 +71,13 @@ class NativeProcessSupervisor(private val context: Context) {
             val pb = ProcessBuilder(cmd)
                 .directory(context.filesDir)
                 .redirectErrorStream(true)
-            process = pb.start()
-            process!!.outputStream.close()
+            val proc = pb.start()
+            process = proc
+            proc.outputStream.close()
 
             stdoutThread = Thread {
                 try {
-                    BufferedReader(InputStreamReader(process!!.inputStream)).use { r ->
+                    proc.inputStream.bufferedReader().use { r ->
                         var line: String?
                         while (r.readLine().also { line = it } != null) {
                             val l = line ?: continue
@@ -97,9 +99,12 @@ class NativeProcessSupervisor(private val context: Context) {
                             }
                         }
                     }
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    if (!shuttingDown.get()) {
+                        Logx.w(TAG, "stdout reader error: ${e.message}")
+                    }
                 } finally {
-                    val exitCode = try { process?.waitFor() } catch (_: Exception) { null }
+                    val exitCode = try { proc.waitFor() } catch (_: Exception) { null }
                     if (!shuttingDown.get()) {
                         Logx.e(TAG, "native process exited unexpectedly with code $exitCode")
                         connected.set(false)
@@ -114,7 +119,8 @@ class NativeProcessSupervisor(private val context: Context) {
                 start()
             }
 
-            handler.postDelayed({
+            gracePeriodRunnable?.let { handler.removeCallbacks(it) }
+            val runnable = Runnable {
                 if (!shuttingDown.get()) {
                     if (process?.isAlive == true) {
                         if (!connected.get()) {
@@ -130,7 +136,9 @@ class NativeProcessSupervisor(private val context: Context) {
                         EventBus.dispatch(AppEvent.LogMessage("[E] Native transport failed to start (process exited)"))
                     }
                 }
-            }, 6000L)
+            }
+            gracePeriodRunnable = runnable
+            handler.postDelayed(runnable, 6000L)
 
         } catch (e: Exception) {
             Logx.e(TAG, "spawn failed", e)
@@ -142,6 +150,8 @@ class NativeProcessSupervisor(private val context: Context) {
     }
 
     private fun cleanup() {
+        gracePeriodRunnable?.let { handler.removeCallbacks(it) }
+        gracePeriodRunnable = null
         stdoutThread?.interrupt()
         stdoutThread = null
         process?.let { p ->

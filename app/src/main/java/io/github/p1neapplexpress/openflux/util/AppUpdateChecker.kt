@@ -82,7 +82,7 @@ object AppUpdateChecker {
             }
         }
 
-        (activity as LifecycleOwner).lifecycleScope.launch(Dispatchers.IO) {
+        (activity as? LifecycleOwner)?.lifecycleScope?.launch(Dispatchers.IO) {
             try {
                 val url = URL(GITHUB_API_URL)
                 val conn = (url.openConnection() as HttpURLConnection).apply {
@@ -94,10 +94,13 @@ object AppUpdateChecker {
                 }
 
                 if (conn.responseCode != 200) {
-                    Logx.d(TAG, "GitHub releases API returned HTTP ${conn.responseCode}")
+                    val code = conn.responseCode
+                    Logx.d(TAG, "GitHub releases API returned HTTP $code")
                     conn.disconnect()
                     withContext(Dispatchers.Main) {
-                        onResult?.invoke(false, "HTTP ${conn.responseCode}")
+                        if (!activity.isFinishing && !activity.isDestroyed) {
+                            onResult?.invoke(false, "HTTP $code")
+                        }
                     }
                     return@launch
                 }
@@ -117,8 +120,8 @@ object AppUpdateChecker {
                     val downloadUrl = apkAsset?.browser_download_url?.ifBlank { null } ?: release.html_url
 
                     withContext(Dispatchers.Main) {
-                        onResult?.invoke(true, remoteTag)
                         if (!activity.isFinishing && !activity.isDestroyed) {
+                            onResult?.invoke(true, remoteTag)
                             try {
                                 showUpdateDialog(activity, release, downloadUrl)
                             } catch (e: Exception) {
@@ -129,13 +132,17 @@ object AppUpdateChecker {
                 } else {
                     Logx.d(TAG, "App is up to date: current=$currentVersion, remote=$remoteTag")
                     withContext(Dispatchers.Main) {
-                        onResult?.invoke(false, remoteTag)
+                        if (!activity.isFinishing && !activity.isDestroyed) {
+                            onResult?.invoke(false, remoteTag)
+                        }
                     }
                 }
             } catch (e: Exception) {
                 Logx.d(TAG, "Failed to check for updates: ${e.message}")
                 withContext(Dispatchers.Main) {
-                    onResult?.invoke(false, e.message ?: "Network error")
+                    if (!activity.isFinishing && !activity.isDestroyed) {
+                        onResult?.invoke(false, e.message ?: "Network error")
+                    }
                 }
             }
         }

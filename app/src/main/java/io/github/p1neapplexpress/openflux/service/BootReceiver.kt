@@ -12,6 +12,10 @@ import io.github.p1neapplexpress.openflux.util.TunnelLinkParser
 import io.github.p1neapplexpress.openflux.vpn.VPNConfig
 import io.github.p1neapplexpress.openflux.vpn.VpnIntentFactory
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+
 class BootReceiver : BroadcastReceiver() {
 
     companion object {
@@ -24,19 +28,22 @@ class BootReceiver : BroadcastReceiver() {
             return
         }
 
-        val appSettings = AppSettings(context)
-        if (!appSettings.autoConnectOnBoot) {
-            Logx.d(TAG, "autoConnectOnBoot is disabled; ignoring boot")
-            return
-        }
+        val pendingResult = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val appSettings = AppSettings(context)
+                if (!appSettings.autoConnectOnBoot) {
+                    Logx.d(TAG, "autoConnectOnBoot is disabled; ignoring boot")
+                    return@launch
+                }
 
-        val repo = TunnelRepository(context)
-        val selected = repo.getSelected() ?: run {
-            Logx.w(TAG, "No selected tunnel found for auto-connect on boot")
-            return
-        }
+                val repo = TunnelRepository(context)
+                val selected = repo.getSelected() ?: run {
+                    Logx.w(TAG, "No selected tunnel found for auto-connect on boot")
+                    return@launch
+                }
 
-        Logx.i(TAG, "Auto-connecting tunnel '${selected.name}' on device boot")
+                Logx.i(TAG, "Auto-connecting tunnel '${selected.name}' on device boot")
         val prepared = TunnelLinkParser.ensureLocalKeyFile(context, selected)
         val splitPrefs = SplitTunnelPreferences(context)
         val appBypass = splitPrefs.mode == SplitTunnelPreferences.MODE_BYPASS
@@ -99,6 +106,12 @@ class BootReceiver : BroadcastReceiver() {
             context.startForegroundService(vpnIntent)
         } else {
             context.startService(vpnIntent)
+        }
+            } catch (e: Exception) {
+                Logx.e(TAG, "Error in boot auto-connect", e)
+            } finally {
+                pendingResult.finish()
+            }
         }
     }
 }

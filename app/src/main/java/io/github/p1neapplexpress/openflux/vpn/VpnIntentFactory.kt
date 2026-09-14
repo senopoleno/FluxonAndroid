@@ -23,12 +23,14 @@ object VpnIntentFactory {
             putExtra(Constants.INTENT_BYPASS_LAN, cfg.bypassLan)
             putExtra(Constants.INTENT_KILL_SWITCH, cfg.killSwitch)
             putExtra(Constants.INTENT_IP_TYPE, cfg.ipType)
-            cfg.remoteServer?.let { putExtra(Constants.INTENT_REMOTE_SERVER, it) }
-            putExtra(Constants.INTENT_REMOTE_PORT, cfg.remotePort)
+            cfg.remoteServer?.let {
+                putExtra(Constants.INTENT_REMOTE_SERVER, it)
+                putExtra(Constants.INTENT_REMOTE_PORT, cfg.remotePort)
+            }
             cfg.udpGw?.let { putExtra(Constants.INTENT_UDP_GW, it) }
             cfg.username?.let { putExtra(Constants.INTENT_USERNAME, it) }
             cfg.password?.let { putExtra(Constants.INTENT_PASSWORD, it) }
             cfg.transportType?.let { putExtra(Constants.INTENT_TRANSPORT_TYPE, it) }
-            cfg.transportPayload?.let { putExtra(Constants.INTENT_TRANSPORT_PAYLOAD, it) }
+            cfg.transportPayload?.let { putExtra(Constants.INTENT_TRANSPORT_PAYLOAD, it as Array<String>) }
         }
 }

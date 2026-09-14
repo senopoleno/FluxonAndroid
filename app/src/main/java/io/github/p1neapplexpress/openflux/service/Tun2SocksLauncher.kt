@@ -10,8 +10,9 @@ class Tun2SocksLauncher(private val context: Context) {
 
     companion object {
         private const val TAG = "Tun2SocksLauncher"
-        private const val SEND_FD_ATTEMPTS = 10
-        private const val SEND_FD_BASE_DELAY_MS = 500L
+        private const val SEND_FD_ATTEMPTS = 6
+        private const val SEND_FD_BASE_DELAY_MS = 400L
+        private const val SEND_FD_MAX_DELAY_MS = 800L
 
         private const val NETIF_IPADDR = "26.26.26.2"
         private const val NETIF_NETMASK = "255.255.255.0"
@@ -44,7 +45,10 @@ class Tun2SocksLauncher(private val context: Context) {
         val tun2socksBin = "$nativeDir/libtun2socks.so"
 
         val sockPath = File(context.applicationInfo.dataDir, "sock_path").apply {
-            if (!exists()) createNewFile()
+            if (!exists()) {
+                runCatching { createNewFile() }
+                    .onFailure { Logx.w(TAG, "Failed to create sock_path: ${it.message}") }
+            }
             setWritable(true, false)
             setReadable(true, false)
         }
@@ -56,7 +60,7 @@ class Tun2SocksLauncher(private val context: Context) {
             command = listOf(pdnsdBin, "-c", "${context.filesDir}/pdnsd.conf"),
             workingDir = context.filesDir.absolutePath,
         )
-        Thread.sleep(500L)
+        Thread.sleep(300L)
 
         
         Logx.i(TAG, "starting tun2socks")
@@ -64,7 +68,7 @@ class Tun2SocksLauncher(private val context: Context) {
             command = buildCommand(tun2socksBin, fd, server, port, username, password, ipv6, udpgw, sockPath, mtu),
             workingDir = context.filesDir.absolutePath,
         )
-        Thread.sleep(500L)
+        Thread.sleep(300L)
 
         
         for (attempt in 1..SEND_FD_ATTEMPTS) {
@@ -75,7 +79,7 @@ class Tun2SocksLauncher(private val context: Context) {
             }
             Logx.w(TAG, "sendfd attempt $attempt failed (ret=$r)")
             try {
-                Thread.sleep(SEND_FD_BASE_DELAY_MS * attempt)
+                Thread.sleep((SEND_FD_BASE_DELAY_MS * attempt).coerceAtMost(SEND_FD_MAX_DELAY_MS))
             } catch (_: InterruptedException) {
                 Thread.currentThread().interrupt()
                 return false
@@ -149,6 +153,7 @@ server {
 
         val cache = File(context.filesDir, "pdnsd.cache")
         if (cache.exists()) cache.delete()
-        cache.createNewFile()
+        runCatching { cache.createNewFile() }
+            .onFailure { Logx.w(TAG, "Failed to create pdnsd.cache: ${it.message}") }
     }
 }

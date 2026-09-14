@@ -21,6 +21,7 @@ import io.github.p1neapplexpress.openflux.vpn.VpnIntentFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 @RequiresApi(Build.VERSION_CODES.N)
@@ -28,6 +29,7 @@ class FluxonTileService : TileService() {
 
     private var unifiedService: IUnifiedService? = null
     private var bound = false
+    private var tileScope: CoroutineScope? = null
     private var tileJob: Job? = null
 
     private val serviceConnection = object : ServiceConnection {
@@ -48,8 +50,10 @@ class FluxonTileService : TileService() {
         super.onStartListening()
         bindVpnService()
         updateTileState()
-        tileJob?.cancel()
-        tileJob = CoroutineScope(Dispatchers.Main).launch {
+        tileScope?.cancel()
+        val scope = CoroutineScope(Dispatchers.Main + Job())
+        tileScope = scope
+        tileJob = scope.launch {
             io.github.p1neapplexpress.openflux.event.EventBus.events.collect { event ->
                 when (event) {
                     is io.github.p1neapplexpress.openflux.event.AppEvent.TransportConnected -> updateTileState()
@@ -64,6 +68,8 @@ class FluxonTileService : TileService() {
     override fun onStopListening() {
         tileJob?.cancel()
         tileJob = null
+        tileScope?.cancel()
+        tileScope = null
         unbindVpnService()
         super.onStopListening()
     }

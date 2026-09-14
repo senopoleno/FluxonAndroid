@@ -47,6 +47,7 @@ object ProcessRunner {
         if (!f.exists()) return
         try {
             val pid = f.readText().trim().toIntOrNull() ?: return
+            if (pid <= 0) return
             Logx.i(TAG, "Killing process PID $pid from $path via SIGKILL")
             android.os.Process.sendSignal(pid, android.os.Process.SIGNAL_KILL)
         } catch (e: Exception) {

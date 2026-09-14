@@ -38,6 +38,7 @@ class SocksVpnService : android.net.VpnService() {
     @Volatile private var lastIntent: Intent? = null
     private val serviceScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main + kotlinx.coroutines.SupervisorJob())
     private var pingJob: kotlinx.coroutines.Job? = null
+    private val alreadyStopping = java.util.concurrent.atomic.AtomicBoolean(false)
 
     private val binder = object : IUnifiedService.Stub() {
         override fun isVpnRunning(): Boolean = vpn.isRunning.get()
@@ -126,7 +127,13 @@ class SocksVpnService : android.net.VpnService() {
             return START_STICKY
         }
 
-        vpn.configure(intent)
+        alreadyStopping.set(false)
+        val configured = vpn.configure(intent)
+        if (!configured) {
+            Logx.e(TAG, "VPN configure failed, aborting startup")
+            stopEverything()
+            return START_NOT_STICKY
+        }
         EventBus.dispatch(AppEvent.LogMessage("[S] VPN configured"))
         Logx.i(TAG, "VPN configured")
 
@@ -259,6 +266,10 @@ class SocksVpnService : android.net.VpnService() {
     }
 
     private fun stopEverything() {
+        if (alreadyStopping.getAndSet(true)) {
+            Logx.d(TAG, "stopEverything already in progress, skipping")
+            return
+        }
         Logx.i(TAG, "stopEverything")
         EventBus.dispatch(AppEvent.VpnDisconnected)
         notifications.stopSpeedUpdates()

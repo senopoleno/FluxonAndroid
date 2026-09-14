@@ -182,11 +182,11 @@ class SplitTunnelActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
 
+        super.onCreate(savedInstanceState)
+
         val themePrefs = ThemePreferences(this)
 
         themePrefs.applyTheme()
-
-        super.onCreate(savedInstanceState)
 
         val isNight = when (themePrefs.themeMode) {
 
@@ -1179,29 +1179,27 @@ class SplitTunnelActivity : AppCompatActivity() {
             holder.checkbox.isChecked = item.isSelected
 
             val toggleAction = {
-
-                val newState = !holder.checkbox.isChecked
-
-                holder.checkbox.isChecked = newState
-
-                onToggle(item, newState)
-
+                val pos = holder.bindingAdapterPosition
+                if (pos != RecyclerView.NO_POSITION && pos in currentList.indices) {
+                    val currentItem = currentList[pos]
+                    val newState = !holder.checkbox.isChecked
+                    holder.checkbox.isChecked = newState
+                    onToggle(currentItem, newState)
+                }
             }
 
             holder.itemView.setOnClickListener {
-
                 it.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-
                 toggleAction()
-
             }
 
             holder.checkbox.setOnClickListener {
-
                 it.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-
-                onToggle(item, holder.checkbox.isChecked)
-
+                val pos = holder.bindingAdapterPosition
+                if (pos != RecyclerView.NO_POSITION && pos in currentList.indices) {
+                    val currentItem = currentList[pos]
+                    onToggle(currentItem, holder.checkbox.isChecked)
+                }
             }
 
         }

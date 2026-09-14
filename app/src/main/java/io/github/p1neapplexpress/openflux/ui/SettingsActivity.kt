@@ -93,9 +93,9 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         themePrefs = ThemePreferences(this)
         themePrefs.applyTheme()
-        super.onCreate(savedInstanceState)
 
         val isNight = when (themePrefs.themeMode) {
             ThemePreferences.THEME_LIGHT -> false

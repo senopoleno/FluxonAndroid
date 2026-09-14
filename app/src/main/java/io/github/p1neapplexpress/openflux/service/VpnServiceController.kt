@@ -52,13 +52,13 @@ class VpnServiceController(private val service: VpnService) {
 
     fun isConfigured(): Boolean = iface != null
 
-    fun configure(intent: Intent) {
+    fun configure(intent: Intent): Boolean {
 
         if (iface != null) {
 
             Logx.w(TAG, "configure() called twice; ignoring")
 
-            return
+            return true
 
         }
 
@@ -127,12 +127,18 @@ class VpnServiceController(private val service: VpnService) {
 
         }
 
+        // Use numeric parsing to avoid InetAddress.getByName() performing a DNS lookup on the calling thread
         listOfNotNull(dns, secDns).forEach { server ->
             runCatching {
-                val addr = java.net.InetAddress.getByName(server)
+                val addr = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    android.net.InetAddresses.parseNumericAddress(server)
+                } else {
+                    @Suppress("DEPRECATION")
+                    java.net.InetAddress.getByName(server.filter { it.isDigit() || it == '.' || it == ':' })
+                }
                 val prefix = if (addr is java.net.Inet6Address) 128 else 32
                 builder.addRoute(addr, prefix)
-            }
+            }.onFailure { Logx.w(TAG, "Failed to add DNS host route for $server: ${it.message}") }
         }
 
         val effectivePerApp = perApp && appList.isNotEmpty()
@@ -163,9 +169,13 @@ class VpnServiceController(private val service: VpnService) {
 
             EventBus.dispatch(AppEvent.LogMessage("[E] VPN establish failed"))
 
+            return false
+
         } else {
 
             Logx.d(TAG, "VPN interface established fd=${iface?.fd}")
+
+            return true
 
         }
 

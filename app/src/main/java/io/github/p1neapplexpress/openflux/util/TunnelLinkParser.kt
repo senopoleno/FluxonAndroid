@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets
 
 object TunnelLinkParser {
 
+    private const val TAG = "TunnelLinkParser"
     private const val SCHEME_OPENFLUX = "openflux"
     private const val SCHEME_FLUXON = "fluxon"
     private const val HOST_IMPORT = "import"
@@ -30,7 +31,13 @@ object TunnelLinkParser {
         if (key.isNullOrEmpty() && context != null) {
             val keyPath = argValue(tunnel.transportConnPayload, "--encryption-key-file")
             if (keyPath.isNotEmpty()) {
-                key = runCatching { File(keyPath).readText().trim() }.getOrNull()
+                val f = File(keyPath).canonicalFile
+                val allowedDir = context.filesDir.canonicalFile
+                if (f.absolutePath.startsWith(allowedDir.absolutePath)) {
+                    key = runCatching { f.readText().trim() }.getOrNull()
+                } else {
+                    Logx.w(TAG, "Rejected key file path outside filesDir: $keyPath")
+                }
             }
             if (key.isNullOrEmpty()) {
                 val defaultFile = File(context.filesDir, "key_${tunnel.id}.txt")
@@ -72,8 +79,9 @@ object TunnelLinkParser {
         if (key.isNullOrEmpty()) {
             // Check if local file exists from payload
             if (keyIdx != -1 && keyIdx + 1 < payload.size) {
-                val f = File(payload[keyIdx + 1])
-                if (f.exists()) {
+                val f = File(payload[keyIdx + 1]).canonicalFile
+                val allowedDir = context.filesDir.canonicalFile
+                if (f.absolutePath.startsWith(allowedDir.absolutePath) && f.exists()) {
                     key = runCatching { f.readText().trim() }.getOrNull()
                 }
             }
@@ -91,7 +99,10 @@ object TunnelLinkParser {
 
         // Write to local filesDir
         val localKeyFile = File(context.filesDir, "key_${tunnel.id}.txt")
-        runCatching { localKeyFile.writeText(key) }
+        val writeOk = runCatching { localKeyFile.writeText(key) }.isSuccess
+        if (!writeOk) {
+            Logx.w(TAG, "Failed to write local key file: ${localKeyFile.absolutePath}")
+        }
 
         if (keyIdx != -1 && keyIdx + 1 < payload.size) {
             payload[keyIdx + 1] = localKeyFile.absolutePath

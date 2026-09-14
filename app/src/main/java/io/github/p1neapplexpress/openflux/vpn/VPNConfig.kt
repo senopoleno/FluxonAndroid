@@ -49,7 +49,11 @@ data class VPNConfig(
             killSwitch == other.killSwitch &&
             ipType == other.ipType &&
             remoteServer == other.remoteServer &&
-            remotePort == other.remotePort
+            remotePort == other.remotePort &&
+            transportType == other.transportType &&
+            (transportPayload == null && other.transportPayload == null ||
+                transportPayload != null && other.transportPayload != null &&
+                transportPayload.contentEquals(other.transportPayload))
     }
 
     override fun hashCode(): Int {
@@ -73,6 +77,8 @@ data class VPNConfig(
         result = 31 * result + ipType
         result = 31 * result + (remoteServer?.hashCode() ?: 0)
         result = 31 * result + remotePort
+        result = 31 * result + (transportType?.hashCode() ?: 0)
+        result = 31 * result + (transportPayload?.contentHashCode() ?: 0)
         return result
     }
 }
