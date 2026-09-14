@@ -27,6 +27,7 @@ object Constants {
     const val INTENT_REMOTE_PORT = INTENT_PREFIX + "REMOTE_PORT"
     const val INTENT_TRANSPORT_TYPE = INTENT_PREFIX + "TRANSPORT_TYPE"
     const val INTENT_TRANSPORT_PAYLOAD = INTENT_PREFIX + "TRANSPORT_PAYLOAD"
+    const val INTENT_AUTONOMOUS = INTENT_PREFIX + "AUTONOMOUS"
 
     const val PREF = "profile"
     const val PREF_PROFILE = "profile"

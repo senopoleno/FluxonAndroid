@@ -27,6 +27,9 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -339,8 +342,8 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
                 _healthMap.value = healthCache.toMap()
                 startUptimeCounter()
                 viewModelScope.launch(Dispatchers.IO) {
-                    kotlinx.coroutines.delay(500L)
-                    checkRunningHealthInternal(tunnel)
+                    kotlinx.coroutines.delay(1500L)
+                    probeRunningTunnel(tunnel)
                 }
             }
             refresh()
@@ -400,13 +403,17 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         val tunnels = repo.load()
         val runningId = (_active.value as? TunnelState.Running)?.tunnel?.id
         viewModelScope.launch(Dispatchers.IO) {
-            for (t in tunnels) {
-                if (t.id == runningId) {
-                    healthCache[t.id] = _tunnelHealth.value
-                } else {
-                    healthCache[t.id] = TunnelHealth.UNKNOWN
-                    pingCache.remove(t.id)
-                }
+            coroutineScope {
+                tunnels.map { t ->
+                    async {
+                        if (t.id == runningId) {
+                            healthCache[t.id] = _tunnelHealth.value
+                        } else {
+                            val ok = probeTunnel(t)
+                            healthCache[t.id] = if (ok) TunnelHealth.AVAILABLE else TunnelHealth.UNAVAILABLE
+                        }
+                    }
+                }.awaitAll()
             }
             _healthMap.value = healthCache.toMap()
             _pingMap.value = pingCache.toMap()
@@ -474,7 +481,12 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         if (service?.isFServiceRunning() != true || service?.isVpnRunning() != true) {
             return@withContext false
         }
-        checkRunningHealthInternal(tunnel)
+        for (attempt in 1..3) {
+            val ok = checkRunningHealthInternal(tunnel)
+            if (ok) return@withContext true
+            if (attempt < 3) kotlinx.coroutines.delay(1500L)
+        }
+        false
     }
 
     private fun checkRunningHealthInternal(tunnel: Tunnel): Boolean {
@@ -556,11 +568,32 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
     private fun probeTunnel(tunnel: Tunnel): Boolean {
         val isCurrentRunning = (_active.value is TunnelState.Running) &&
                 (_active.value.tunnel?.id == tunnel.id)
-        if (isCurrentRunning) {
+        return if (isCurrentRunning) {
             val session = io.github.p1neapplexpress.openflux.util.LocalSocksSession.getActive()
             val socksProxy = java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", session.port))
             val latency = probeLiveConnectivityWithLatency(socksProxy)
-            return if (latency > 0) {
+            if (latency > 0) {
+                pingCache[tunnel.id] = latency
+                _pingMap.value = pingCache.toMap()
+                true
+            } else {
+                pingCache.remove(tunnel.id)
+                _pingMap.value = pingCache.toMap()
+                false
+            }
+        } else {
+            val target = io.github.p1neapplexpress.openflux.vpn.TunnelEndpointHelper.extractTarget(tunnel)
+            val startMs = android.os.SystemClock.elapsedRealtime()
+            val reachable = try {
+                java.net.Socket().use { socket ->
+                    socket.connect(java.net.InetSocketAddress(target.first, target.second), 2500)
+                    socket.isConnected
+                }
+            } catch (_: Exception) {
+                false
+            }
+            if (reachable) {
+                val latency = (android.os.SystemClock.elapsedRealtime() - startMs).coerceAtLeast(1L)
                 pingCache[tunnel.id] = latency
                 _pingMap.value = pingCache.toMap()
                 true
@@ -570,7 +603,6 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
                 false
             }
         }
-        return false
     }
 
     private fun triggerFailoverIfNeeded(failedTunnel: Tunnel) {

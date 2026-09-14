@@ -35,6 +35,7 @@ class NativeProcessSupervisor(private val context: Context) {
             return
         }
         shuttingDown.set(false)
+        connected.set(false)
         Logx.i(TAG, "start transport=$transportType")
         spawn(transportType, payload)
     }
@@ -81,6 +82,19 @@ class NativeProcessSupervisor(private val context: Context) {
                             if (l.isBlank()) continue
                             android.util.Log.d("NativeStdout", l)
                             EventBus.dispatch(AppEvent.LogMessage(l))
+
+                            if (l.contains("CONNECTED!", ignoreCase = true) ||
+                                l.contains("WS ready", ignoreCase = true) ||
+                                l.contains("WS connected", ignoreCase = true) ||
+                                l.contains("WebSocket connected", ignoreCase = true) ||
+                                l.contains("Signaling connected", ignoreCase = true) ||
+                                l.contains("auth OK", ignoreCase = true)
+                            ) {
+                                if (!connected.getAndSet(true)) {
+                                    EventBus.dispatch(AppEvent.TransportConnected)
+                                    Logx.i(TAG, "Native transport confirmed connected from stdout: $l")
+                                }
+                            }
                         }
                     }
                 } catch (_: Exception) {
@@ -103,9 +117,11 @@ class NativeProcessSupervisor(private val context: Context) {
             handler.postDelayed({
                 if (!shuttingDown.get()) {
                     if (process?.isAlive == true) {
-                        connected.set(true)
-                        EventBus.dispatch(AppEvent.TransportConnected)
-                        Logx.i(TAG, "native process up")
+                        if (!connected.get()) {
+                            connected.set(true)
+                            EventBus.dispatch(AppEvent.TransportConnected)
+                            Logx.i(TAG, "native process alive after fallback grace period")
+                        }
                     } else {
                         Logx.e(TAG, "native process died during startup")
                         connected.set(false)
@@ -114,7 +130,7 @@ class NativeProcessSupervisor(private val context: Context) {
                         EventBus.dispatch(AppEvent.LogMessage("[E] Native transport failed to start (process exited)"))
                     }
                 }
-            }, STARTUP_GRACE_MS)
+            }, 6000L)
 
         } catch (e: Exception) {
             Logx.e(TAG, "spawn failed", e)

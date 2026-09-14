@@ -88,10 +88,18 @@ object TunnelEndpointHelper {
         }
         val urlStr = argValue(tunnel.transportConnPayload, "--url")
         if (urlStr.isNotBlank()) {
-            val uri = runCatching { java.net.URI(urlStr) }.getOrNull()
+            val fixedUrl = if (!urlStr.startsWith("http://", ignoreCase = true) && !urlStr.startsWith("https://", ignoreCase = true)) {
+                "https://$urlStr"
+            } else {
+                urlStr
+            }
+            val uri = runCatching { java.net.URI(fixedUrl) }.getOrNull()
             val h = uri?.host
-            val p = if (uri != null && uri.port > 0) uri.port else if (uri?.scheme.equals("https", ignoreCase = true)) 443 else 80
+            val p = if (uri != null && uri.port > 0) uri.port else if (uri?.scheme.equals("http", ignoreCase = true)) 80 else 443
             if (!h.isNullOrBlank()) return Pair(h, p)
+        }
+        if (transportType == "yandex" || transportType == "ydocs" || transportType == "vyandex") {
+            return Pair("docs.yandex.ru", 443)
         }
         return Pair("1.1.1.1", 443)
     }

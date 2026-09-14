@@ -18,12 +18,17 @@ import io.github.p1neapplexpress.openflux.util.SplitTunnelPreferences
 import io.github.p1neapplexpress.openflux.util.TunnelLinkParser
 import io.github.p1neapplexpress.openflux.vpn.VPNConfig
 import io.github.p1neapplexpress.openflux.vpn.VpnIntentFactory
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 @RequiresApi(Build.VERSION_CODES.N)
 class FluxonTileService : TileService() {
 
     private var unifiedService: IUnifiedService? = null
     private var bound = false
+    private var tileJob: Job? = null
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -43,9 +48,22 @@ class FluxonTileService : TileService() {
         super.onStartListening()
         bindVpnService()
         updateTileState()
+        tileJob?.cancel()
+        tileJob = CoroutineScope(Dispatchers.Main).launch {
+            io.github.p1neapplexpress.openflux.event.EventBus.events.collect { event ->
+                when (event) {
+                    is io.github.p1neapplexpress.openflux.event.AppEvent.TransportConnected -> updateTileState()
+                    is io.github.p1neapplexpress.openflux.event.AppEvent.VpnDisconnected,
+                    is io.github.p1neapplexpress.openflux.event.AppEvent.TransportDisconnected -> updateTileState()
+                    else -> Unit
+                }
+            }
+        }
     }
 
     override fun onStopListening() {
+        tileJob?.cancel()
+        tileJob = null
         unbindVpnService()
         super.onStopListening()
     }
@@ -175,7 +193,9 @@ class FluxonTileService : TileService() {
             transportPayload = modifiedPayload.toTypedArray(),
         )
 
-        val intent = VpnIntentFactory.build(this, cfg)
+        val intent = VpnIntentFactory.build(this, cfg).apply {
+            putExtra(io.github.p1neapplexpress.openflux.util.Constants.INTENT_AUTONOMOUS, true)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)
         } else {

@@ -52,6 +52,10 @@ class SocksVpnService : android.net.VpnService() {
 
         override fun startTun2Socks() {
             synchronized(this@SocksVpnService) {
+                if (vpn.isRunning.get()) {
+                    Logx.d(TAG, "tun2socks is already running, ignoring duplicate start")
+                    return
+                }
                 val fd = vpn.fd
                 if (fd <= 0) {
                     Logx.e(TAG, "no tun fd; aborting tun2socks start")
@@ -126,9 +130,10 @@ class SocksVpnService : android.net.VpnService() {
         EventBus.dispatch(AppEvent.LogMessage("[S] VPN configured"))
         Logx.i(TAG, "VPN configured")
 
+        val isAutonomous = intent.getBooleanExtra(Constants.INTENT_AUTONOMOUS, false)
         val transportType = intent.getStringExtra(Constants.INTENT_TRANSPORT_TYPE)
         val transportPayload = intent.getStringArrayExtra(Constants.INTENT_TRANSPORT_PAYLOAD)
-        if (!transportType.isNullOrBlank() && transportPayload != null && transportPayload.isNotEmpty()) {
+        if (isAutonomous && !transportType.isNullOrBlank() && transportPayload != null && transportPayload.isNotEmpty()) {
             serviceScope.launch(Dispatchers.IO) {
                 try {
                     EventBus.dispatch(AppEvent.LogMessage("[I] Starting native transport ($transportType)..."))

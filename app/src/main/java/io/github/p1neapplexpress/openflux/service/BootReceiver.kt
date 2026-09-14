@@ -92,7 +92,9 @@ class BootReceiver : BroadcastReceiver() {
             transportPayload = modifiedPayload.toTypedArray(),
         )
 
-        val vpnIntent = VpnIntentFactory.build(context, cfg)
+        val vpnIntent = VpnIntentFactory.build(context, cfg).apply {
+            putExtra(io.github.p1neapplexpress.openflux.util.Constants.INTENT_AUTONOMOUS, true)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.startForegroundService(vpnIntent)
         } else {
