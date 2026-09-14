@@ -372,6 +372,8 @@
     <string name="settings_memory_monitor_title">Мониторинг памяти</string>
     <string name="settings_memory_monitor_desc">Отображать потребление ОЗУ на главном экране</string>
     <string name="memory_usage_format">ОЗУ: %1$d МБ</string>
+    <string name="settings_show_ping_title">Отображение пинга</string>
+    <string name="settings_show_ping_desc">Показывать пинг в карточке конфигурации на главном экране</string>
 
 
     <string name="settings_backup_exported">Успешно экспортировано конфигураций: %1$d</string>

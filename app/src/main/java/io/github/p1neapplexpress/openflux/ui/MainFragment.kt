@@ -23,7 +23,9 @@ class MainFragment : BaseFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        view.findViewById<ViewPager2>(R.id.view_pager).adapter = PagerAdapter(requireActivity())
+        val viewPager = view.findViewById<ViewPager2>(R.id.view_pager)
+        viewPager.adapter = PagerAdapter(requireActivity())
+        viewPager.offscreenPageLimit = 1
     }
 
     private inner class PagerAdapter(activity: FragmentActivity) : FragmentStateAdapter(activity) {

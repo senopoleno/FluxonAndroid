@@ -97,6 +97,7 @@ class AppSettings(private val context: Context) {
         private const val KEY_SOCKS5_PASS = "socks5_custom_pass"
 
         private const val KEY_SHOW_MEMORY_USAGE = "show_memory_usage"
+        private const val KEY_SHOW_PING_IN_MAIN_MENU = "show_ping_in_main_menu"
 
         private const val KEY_AUTO_UPDATE_CHECK = "auto_update_check"
 
@@ -340,10 +341,12 @@ class AppSettings(private val context: Context) {
 
 
     var showMemoryUsage: Boolean
-
         get() = prefs.getBoolean(KEY_SHOW_MEMORY_USAGE, false)
-
         set(value) = prefs.edit().putBoolean(KEY_SHOW_MEMORY_USAGE, value).apply()
+
+    var showPingInMainMenu: Boolean
+        get() = prefs.getBoolean(KEY_SHOW_PING_IN_MAIN_MENU, true)
+        set(value) = prefs.edit().putBoolean(KEY_SHOW_PING_IN_MAIN_MENU, value).apply()
 
 
 

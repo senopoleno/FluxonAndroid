@@ -370,6 +370,8 @@
     <string name="settings_memory_monitor_title">Memory Monitoring</string>
     <string name="settings_memory_monitor_desc">Show RAM usage on main screen</string>
     <string name="memory_usage_format">RAM: %1$d MB</string>
+    <string name="settings_show_ping_title">Ping Display</string>
+    <string name="settings_show_ping_desc">Show ping in the configuration badge on the main screen</string>
 
 
     <string name="settings_backup_exported">Successfully exported configurations: %1$d</string>

@@ -71,6 +71,7 @@ class TunnelsFragment : BaseFragment() {
     private lateinit var configDot: View
     private lateinit var tunnelName: TextView
     private lateinit var chevron: ImageView
+    private lateinit var configPing: TextView
     private lateinit var statusText: TextView
     private lateinit var uptimeContainer: View
     private lateinit var uptimeText: TextView
@@ -202,6 +203,7 @@ class TunnelsFragment : BaseFragment() {
         configDot = view.findViewById(R.id.configDot)
         tunnelName = view.findViewById(R.id.tunnelName)
         chevron = view.findViewById(R.id.chevron)
+        configPing = view.findViewById(R.id.configPing)
         statusText = view.findViewById(R.id.statusText)
         uptimeContainer = view.findViewById(R.id.uptimeContainer)
         uptimeText = view.findViewById(R.id.uptimeText)
@@ -274,6 +276,8 @@ class TunnelsFragment : BaseFragment() {
         super.onResume()
         vm.checkSelectedHealth(force = false)
         updateMemoryUsage()
+        updateConfigPing()
+        ensureAnimations(vm.active.value)
     }
 
     private fun requestVpnAndStart() {
@@ -284,7 +288,7 @@ class TunnelsFragment : BaseFragment() {
     private fun observe() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                launch { vm.active.collect { applyState(it) } }
+                launch { vm.active.collect { applyState(it); updateConfigPing() } }
                 launch { vm.uptimeSeconds.collect { renderUptime(it) } }
                 launch { vm.selected.collect { renderSelected(it) } }
                 launch {
@@ -292,6 +296,7 @@ class TunnelsFragment : BaseFragment() {
                         .collect { (rx, tx) -> renderSpeed(rx, tx) }
                 }
                 launch { vm.tunnelHealth.collect { renderHealth(it) } }
+                launch { vm.pingMap.collect { updateConfigPing() } }
             }
         }
     }
@@ -309,6 +314,28 @@ class TunnelsFragment : BaseFragment() {
     private fun renderSelected(tunnel: Tunnel?) {
         tunnelName.text = tunnel?.name ?: getString(R.string.no_configs)
         renderHealth(vm.tunnelHealth.value)
+        updateConfigPing()
+    }
+
+    private fun updateConfigPing() {
+        if (!::configPing.isInitialized) return
+        val isRunning = vm.active.value is TunnelState.Running
+        val showPing = appSettings.showPingInMainMenu
+        val selectedId = vm.selectedTunnelId
+        val ping = selectedId?.let { vm.getTunnelPing(it) }
+
+        if (isRunning && showPing && ping != null && ping > 0) {
+            configPing.isVisible = true
+            configPing.text = getString(R.string.ping_ms_format, ping)
+            val colorRes = when {
+                ping < 150 -> R.color.state_running
+                ping < 350 -> R.color.state_connecting
+                else -> R.color.state_error
+            }
+            configPing.setTextColor(ContextCompat.getColor(requireContext(), colorRes))
+        } else {
+            configPing.isVisible = false
+        }
     }
 
     private fun renderHealth(health: TunnelHealth) {
@@ -345,7 +372,6 @@ class TunnelsFragment : BaseFragment() {
         val items = content.findViewById<LinearLayout>(R.id.dropdown_items)
         val selectedId = vm.selectedTunnelId
         val rowDots = mutableMapOf<Long, View>()
-        val rowPings = mutableMapOf<Long, TextView>()
 
         fun tintDot(dot: View, health: TunnelHealth) {
             val ctx = context ?: return
@@ -358,28 +384,11 @@ class TunnelsFragment : BaseFragment() {
             dot.background?.setTint(ContextCompat.getColor(ctx, colorRes))
         }
 
-        fun updatePingView(pingView: TextView, ping: Long?) {
-            val ctx = context ?: return
-            if (ping != null && ping > 0) {
-                pingView.isVisible = true
-                pingView.text = getString(R.string.ping_ms_format, ping)
-                val colorRes = when {
-                    ping < 150 -> R.color.state_running
-                    ping < 350 -> R.color.state_connecting
-                    else -> R.color.state_error
-                }
-                pingView.setTextColor(ContextCompat.getColor(ctx, colorRes))
-            } else {
-                pingView.isVisible = false
-            }
-        }
-
         for (tunnel in tunnels) {
             val row = inflater.inflate(R.layout.item_dropdown_config, items, false)
             val nameView = row.findViewById<TextView>(R.id.item_name)
             val check = row.findViewById<ImageView>(R.id.item_check)
             val dot = row.findViewById<View>(R.id.item_dot)
-            val pingView = row.findViewById<TextView>(R.id.item_ping)
             val isSelected = tunnel.id == selectedId
 
             nameView.text = tunnel.name
@@ -394,9 +403,6 @@ class TunnelsFragment : BaseFragment() {
 
             tintDot(dot, vm.getTunnelHealth(tunnel.id))
             rowDots[tunnel.id] = dot
-
-            updatePingView(pingView, vm.getTunnelPing(tunnel.id))
-            rowPings[tunnel.id] = pingView
 
             row.setOnClickListener {
                 it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -473,20 +479,10 @@ class TunnelsFragment : BaseFragment() {
         chevron.animate().rotation(180f).setDuration(220L).setInterpolator(DecelerateInterpolator()).start()
 
         val dropdownCollectorsJob = viewLifecycleOwner.lifecycleScope.launch {
-            launch {
-                vm.healthMap.collect { map ->
-                    for ((id, d) in rowDots) {
-                        val h = map[id] ?: vm.getTunnelHealth(id)
-                        tintDot(d, h)
-                    }
-                }
-            }
-            launch {
-                vm.pingMap.collect { map ->
-                    for ((id, pv) in rowPings) {
-                        val ping = map[id]
-                        updatePingView(pv, ping)
-                    }
+            vm.healthMap.collect { map ->
+                for ((id, d) in rowDots) {
+                    val h = map[id] ?: vm.getTunnelHealth(id)
+                    tintDot(d, h)
                 }
             }
         }
@@ -599,7 +595,10 @@ class TunnelsFragment : BaseFragment() {
         val isFirst = isInitialStateBinding
         isInitialStateBinding = false
 
-        if (state == currentVisualState && !isFirst) return
+        if (state == currentVisualState && !isFirst) {
+            ensureAnimations(state)
+            return
+        }
         currentVisualState = state
 
         val color = state.color
@@ -805,6 +804,41 @@ class TunnelsFragment : BaseFragment() {
             duration = 520L
             interpolator = AccelerateDecelerateInterpolator()
             start()
+        }
+    }
+
+    private fun ensureAnimations(state: TunnelState) {
+        val color = state.color
+        aurora.setStateColor(color)
+        when (state) {
+            is TunnelState.Idle -> {
+                aurora.setIntensity(0.4f)
+                pulseRings.stop()
+                stopRotation()
+                startBreath()
+            }
+            is TunnelState.Connecting,
+            is TunnelState.StartingTransport,
+            is TunnelState.StartingTun2Socks -> {
+                aurora.setIntensity(0.75f)
+                startRotation()
+                pulseRings.setColor(color)
+                pulseRings.start(color, intervalMs = 1800L)
+                stopBreath()
+            }
+            is TunnelState.Running -> {
+                aurora.setIntensity(1f)
+                stopRotation()
+                pulseRings.setColor(color)
+                pulseRings.start(color, intervalMs = 1400L)
+                startBreath()
+            }
+            is TunnelState.Error -> {
+                aurora.setIntensity(0.9f)
+                pulseRings.stop()
+                stopRotation()
+                stopBreath()
+            }
         }
     }
 

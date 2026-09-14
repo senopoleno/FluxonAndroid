@@ -57,6 +57,18 @@
             android:maxWidth="170dp"
             tools:text="My Tunnel" />
 
+        <TextView
+            android:id="@+id/configPing"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:textColor="@color/state_running"
+            android:textSize="12sp"
+            android:fontFamily="sans-serif-medium"
+            android:visibility="gone"
+            tools:text="45 мс"
+            tools:visibility="visible" />
+
         <ImageView
             android:id="@+id/chevron"
             android:layout_width="16dp"
@@ -177,9 +189,6 @@
             android:layout_marginTop="6dp"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:paddingHorizontal="8dp"
-            android:paddingVertical="3dp"
-            android:background="@drawable/bg_badge_memory"
             android:visibility="gone">
 
             <ImageView

@@ -31,6 +31,7 @@ class PulseRingsView @JvmOverloads constructor(
     private var emissionIntervalMs = 1500L
     private var lastEmitAt = 0L
     private var active = false
+    private var shouldRun = false
 
     private val ticker = object : Runnable {
         override fun run() {
@@ -49,6 +50,7 @@ class PulseRingsView @JvmOverloads constructor(
     fun start(color: Int, intervalMs: Long = 1500L) {
         ringColor = color
         emissionIntervalMs = intervalMs
+        shouldRun = true
         if (active) return
         active = true
         lastEmitAt = 0L
@@ -57,6 +59,7 @@ class PulseRingsView @JvmOverloads constructor(
     }
 
     fun stop() {
+        shouldRun = false
         active = false
         removeCallbacks(ticker)
         rings.clear()
@@ -67,8 +70,19 @@ class PulseRingsView @JvmOverloads constructor(
         ringColor = color
     }
 
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        if (shouldRun && !active) {
+            active = true
+            lastEmitAt = 0L
+            rings.clear()
+            postOnAnimation(ticker)
+        }
+    }
+
     override fun onDetachedFromWindow() {
-        stop()
+        active = false
+        removeCallbacks(ticker)
         super.onDetachedFromWindow()
     }
 

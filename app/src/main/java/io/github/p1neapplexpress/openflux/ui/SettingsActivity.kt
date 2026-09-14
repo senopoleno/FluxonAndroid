@@ -47,6 +47,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var switchBypassLan: MaterialSwitch
     private lateinit var switchNotifySpeed: MaterialSwitch
     private lateinit var switchMemoryMonitor: MaterialSwitch
+    private lateinit var switchShowPing: MaterialSwitch
 
     private lateinit var switchKillSwitch: MaterialSwitch
     private lateinit var switchHotspot: MaterialSwitch
@@ -140,6 +141,7 @@ class SettingsActivity : AppCompatActivity() {
         switchBypassLan = findViewById(R.id.switch_bypass_lan)
         switchNotifySpeed = findViewById(R.id.switch_notify_speed)
         switchMemoryMonitor = findViewById(R.id.switch_memory_monitor)
+        switchShowPing = findViewById(R.id.switch_show_ping)
 
         switchKillSwitch = findViewById(R.id.switch_kill_switch)
         switchHotspot = findViewById(R.id.switch_hotspot)
@@ -234,6 +236,12 @@ class SettingsActivity : AppCompatActivity() {
         switchMemoryMonitor.jumpDrawablesToCurrentState()
         switchMemoryMonitor.setOnCheckedChangeListener { _, isChecked ->
             appSettings.showMemoryUsage = isChecked
+        }
+
+        switchShowPing.isChecked = appSettings.showPingInMainMenu
+        switchShowPing.jumpDrawablesToCurrentState()
+        switchShowPing.setOnCheckedChangeListener { _, isChecked ->
+            appSettings.showPingInMainMenu = isChecked
         }
     }
 
