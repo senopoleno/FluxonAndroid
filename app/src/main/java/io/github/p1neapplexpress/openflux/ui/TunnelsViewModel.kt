@@ -334,10 +334,14 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
                 return@launch
             } else {
                 _active.value = TunnelState.Running(tunnel)
-                _tunnelHealth.value = TunnelHealth.AVAILABLE
-                healthCache[tunnel.id] = TunnelHealth.AVAILABLE
+                _tunnelHealth.value = TunnelHealth.CHECKING
+                healthCache[tunnel.id] = TunnelHealth.CHECKING
                 _healthMap.value = healthCache.toMap()
                 startUptimeCounter()
+                viewModelScope.launch(Dispatchers.IO) {
+                    kotlinx.coroutines.delay(500L)
+                    checkRunningHealthInternal(tunnel)
+                }
             }
             refresh()
         }
@@ -346,18 +350,27 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun stopInternal() {
         Logx.i(TAG, "stopInternal()")
         withContext(Dispatchers.IO) {
+            val ctx = getApplication<Application>()
             try {
                 service?.stopOpenFluxNative()
                 service?.stopVpn()
             } catch (e: Exception) {
                 Logx.e(TAG, "stop failed", e)
             }
-            val ctx = getApplication<Application>()
             try { ctx.unbindService(connection) } catch (_: Exception) {}
             bound = false
             service = null
             activeTunnelData = null
             Logx.setVerbose(false)
+
+            try {
+                val disconnectIntent = Intent(ctx, SocksVpnService::class.java).apply {
+                    action = SocksVpnService.ACTION_DISCONNECT
+                }
+                ctx.startService(disconnectIntent)
+            } catch (e: Exception) {
+                Logx.w(TAG, "Failed sending disconnect intent: ${e.message}")
+            }
         }
         _active.value = TunnelState.Idle
         _rxSpeed.value = 0L
@@ -390,12 +403,13 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
             for (t in tunnels) {
                 if (t.id == runningId) {
                     healthCache[t.id] = _tunnelHealth.value
-                } else if (!healthCache.containsKey(t.id)) {
-                    val available = probeTunnel(t)
-                    healthCache[t.id] = if (available) TunnelHealth.AVAILABLE else TunnelHealth.UNAVAILABLE
+                } else {
+                    healthCache[t.id] = TunnelHealth.UNKNOWN
+                    pingCache.remove(t.id)
                 }
             }
             _healthMap.value = healthCache.toMap()
+            _pingMap.value = pingCache.toMap()
         }
     }
 
@@ -460,20 +474,6 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         if (service?.isFServiceRunning() != true || service?.isVpnRunning() != true) {
             return@withContext false
         }
-        // If data is actively transferring, the tunnel is functioning
-        if (_rxSpeed.value > 50 || _txSpeed.value > 50) {
-            return@withContext true
-        }
-
-        if (checkRunningHealthInternal(tunnel)) {
-            return@withContext true
-        }
-
-        // Quick retry after 2 seconds to avoid false positives on momentary packet drop
-        delay(2000L)
-        if (_rxSpeed.value > 50 || _txSpeed.value > 50) {
-            return@withContext true
-        }
         checkRunningHealthInternal(tunnel)
     }
 
@@ -487,88 +487,90 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         // 1. Verify that the local SOCKS proxy is listening and responsive
         val socksPortOpen = try {
             java.net.Socket().use { s ->
-                s.connect(java.net.InetSocketAddress("127.0.0.1", session.port), 2000)
+                s.connect(java.net.InetSocketAddress("127.0.0.1", session.port), 1500)
                 s.isConnected
             }
         } catch (_: Exception) {
             false
         }
-        if (!socksPortOpen) return false
-
-        // 2. Verify that the remote backend (Yandex doc or MAX ws) is valid and reachable
-        val backendOk = probeTunnel(tunnel)
-        if (!backendOk) return false
-
-        // 3. Verify end-to-end connectivity through SOCKS5 proxy
-        val socksProxy = java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", session.port))
-        val proxyLive = probeLiveConnectivity(socksProxy)
-        if (!proxyLive) {
+        if (!socksPortOpen) {
+            healthCache[tunnel.id] = TunnelHealth.UNAVAILABLE
+            _tunnelHealth.value = TunnelHealth.UNAVAILABLE
+            pingCache.remove(tunnel.id)
+            _pingMap.value = pingCache.toMap()
             triggerFailoverIfNeeded(tunnel)
             return false
         }
+
+        // 2. Verify true end-to-end connectivity through SOCKS5 proxy via bridge to remote VPS
+        val socksProxy = java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", session.port))
+        val latency = probeLiveConnectivityWithLatency(socksProxy)
+        if (latency < 0) {
+            healthCache[tunnel.id] = TunnelHealth.UNAVAILABLE
+            _tunnelHealth.value = TunnelHealth.UNAVAILABLE
+            pingCache.remove(tunnel.id)
+            _pingMap.value = pingCache.toMap()
+            triggerFailoverIfNeeded(tunnel)
+            return false
+        }
+
+        pingCache[tunnel.id] = latency
+        _pingMap.value = pingCache.toMap()
+        healthCache[tunnel.id] = TunnelHealth.AVAILABLE
+        _tunnelHealth.value = TunnelHealth.AVAILABLE
         return true
     }
 
-    private fun probeLiveConnectivity(proxy: java.net.Proxy? = null): Boolean {
+    private fun probeLiveConnectivityWithLatency(proxy: java.net.Proxy): Long {
         val endpoints = listOf(
+            "http://cp.cloudflare.com/generate_204",
             "http://connectivitycheck.gstatic.com/generate_204",
-            "https://www.google.com/generate_204",
-            "https://yandex.ru/generate_204"
+            "http://detectportal.firefox.com/success.txt"
         )
         for (ep in endpoints) {
             try {
                 val url = java.net.URL(ep)
-                val conn = (if (proxy != null) url.openConnection(proxy) else url.openConnection()) as java.net.HttpURLConnection
-                conn.connectTimeout = 3500
-                conn.readTimeout = 3500
+                val conn = url.openConnection(proxy) as java.net.HttpURLConnection
+                conn.connectTimeout = 4000
+                conn.readTimeout = 4000
                 conn.instanceFollowRedirects = false
+                conn.setRequestProperty("User-Agent", "Fluxon/1.1.0")
+                conn.setRequestProperty("Connection", "close")
+                val t0 = android.os.SystemClock.elapsedRealtime()
                 try {
                     val code = conn.responseCode
                     if (code in 200..399 || code == 204) {
-                        return true
+                        val rtt = android.os.SystemClock.elapsedRealtime() - t0
+                        return rtt.coerceAtLeast(1L)
                     }
                 } finally {
                     conn.disconnect()
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Logx.d(TAG, "End-to-end probe failed for $ep: ${e.message}")
             }
         }
-        return false
+        return -1L
     }
 
     private fun probeTunnel(tunnel: Tunnel): Boolean {
-        val startMs = android.os.SystemClock.elapsedRealtime()
         val isCurrentRunning = (_active.value is TunnelState.Running) &&
                 (_active.value.tunnel?.id == tunnel.id)
-        val success = try {
-            if (isCurrentRunning) {
-                val session = io.github.p1neapplexpress.openflux.util.LocalSocksSession.getActive()
-                val socksProxy = java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", session.port))
-                java.net.Socket(socksProxy).use { socket ->
-                    socket.connect(java.net.InetSocketAddress("1.1.1.1", 80), 3500)
-                    socket.isConnected
-                }
+        if (isCurrentRunning) {
+            val session = io.github.p1neapplexpress.openflux.util.LocalSocksSession.getActive()
+            val socksProxy = java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", session.port))
+            val latency = probeLiveConnectivityWithLatency(socksProxy)
+            return if (latency > 0) {
+                pingCache[tunnel.id] = latency
+                _pingMap.value = pingCache.toMap()
+                true
             } else {
-                val target = io.github.p1neapplexpress.openflux.vpn.TunnelEndpointHelper.extractTarget(tunnel)
-                java.net.Socket().use { socket ->
-                    socket.connect(java.net.InetSocketAddress(target.first, target.second), 2500)
-                    socket.isConnected
-                }
+                pingCache.remove(tunnel.id)
+                _pingMap.value = pingCache.toMap()
+                false
             }
-        } catch (_: Exception) {
-            false
         }
-
-        if (success) {
-            val latency = (android.os.SystemClock.elapsedRealtime() - startMs).coerceAtLeast(1L)
-            pingCache[tunnel.id] = latency
-            _pingMap.value = pingCache.toMap()
-        } else {
-            pingCache.remove(tunnel.id)
-            _pingMap.value = pingCache.toMap()
-        }
-
-        return success
+        return false
     }
 
     private fun triggerFailoverIfNeeded(failedTunnel: Tunnel) {

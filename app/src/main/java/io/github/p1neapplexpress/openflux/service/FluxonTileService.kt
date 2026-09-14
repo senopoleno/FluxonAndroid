@@ -186,7 +186,7 @@ class FluxonTileService : TileService() {
     private fun bindVpnService() {
         if (!bound) {
             val intent = Intent(this, SocksVpnService::class.java)
-            bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+            bindService(intent, serviceConnection, 0)
         }
     }
 

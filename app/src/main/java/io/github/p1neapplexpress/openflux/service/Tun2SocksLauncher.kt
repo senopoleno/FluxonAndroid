@@ -90,6 +90,7 @@ class Tun2SocksLauncher(private val context: Context) {
         Logx.i(TAG, "stop()")
         ProcessRunner.killPidFile("${context.filesDir}/tun2socks.pid")
         ProcessRunner.killPidFile("${context.filesDir}/pdnsd.pid")
+        ProcessRunner.killAll()
         runCatching { File(context.applicationInfo.dataDir, "sock_path").delete() }
     }
 

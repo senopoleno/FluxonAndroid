@@ -194,29 +194,7 @@ class SocksVpnService : android.net.VpnService() {
         pingJob = serviceScope.launch {
             val port = lastIntent?.getIntExtra(Constants.INTENT_PORT, 1080) ?: 1080
             val pingMs = withContext(Dispatchers.IO) {
-                runCatching {
-                    val socksProxy = java.net.Proxy(
-                        java.net.Proxy.Type.SOCKS,
-                        java.net.InetSocketAddress("127.0.0.1", port)
-                    )
-                    val t0 = android.os.SystemClock.elapsedRealtime()
-                    java.net.Socket(socksProxy).use { s ->
-                        s.connect(java.net.InetSocketAddress("1.1.1.1", 80), 3500)
-                    }
-                    (android.os.SystemClock.elapsedRealtime() - t0).coerceAtLeast(1L)
-                }.getOrElse {
-                    runCatching {
-                        val socksProxy = java.net.Proxy(
-                            java.net.Proxy.Type.SOCKS,
-                            java.net.InetSocketAddress("127.0.0.1", port)
-                        )
-                        val t0 = android.os.SystemClock.elapsedRealtime()
-                        java.net.Socket(socksProxy).use { s ->
-                            s.connect(java.net.InetSocketAddress("8.8.8.8", 53), 3500)
-                        }
-                        (android.os.SystemClock.elapsedRealtime() - t0).coerceAtLeast(1L)
-                    }.getOrDefault(-1L)
-                }
+                measureRealEndToEndPing(port)
             }
 
             if (!isActive) return@launch
@@ -237,6 +215,42 @@ class SocksVpnService : android.net.VpnService() {
                 ).show()
             }
         }
+    }
+
+    private fun measureRealEndToEndPing(port: Int): Long {
+        val socksProxy = java.net.Proxy(
+            java.net.Proxy.Type.SOCKS,
+            java.net.InetSocketAddress("127.0.0.1", port)
+        )
+        val endpoints = listOf(
+            "http://cp.cloudflare.com/generate_204",
+            "http://connectivitycheck.gstatic.com/generate_204",
+            "http://detectportal.firefox.com/success.txt"
+        )
+        for (ep in endpoints) {
+            try {
+                val url = java.net.URL(ep)
+                val conn = url.openConnection(socksProxy) as java.net.HttpURLConnection
+                conn.connectTimeout = 4000
+                conn.readTimeout = 4000
+                conn.instanceFollowRedirects = false
+                conn.setRequestProperty("User-Agent", "Fluxon/1.1.0")
+                conn.setRequestProperty("Connection", "close")
+                val t0 = android.os.SystemClock.elapsedRealtime()
+                try {
+                    val code = conn.responseCode
+                    if (code in 200..399 || code == 204) {
+                        val rtt = android.os.SystemClock.elapsedRealtime() - t0
+                        return rtt.coerceAtLeast(1L)
+                    }
+                } finally {
+                    conn.disconnect()
+                }
+            } catch (e: Exception) {
+                Logx.d(TAG, "Ping probe failed for $ep: ${e.message}")
+            }
+        }
+        return -1L
     }
 
     private fun stopEverything() {

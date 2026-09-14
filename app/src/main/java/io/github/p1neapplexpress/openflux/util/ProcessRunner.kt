@@ -1,9 +1,12 @@
 package io.github.p1neapplexpress.openflux.util
 
 import java.io.File
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.CopyOnWriteArrayList
 
 object ProcessRunner {
+
+    private const val TAG = "ProcessRunner"
+    private val activeProcesses = CopyOnWriteArrayList<Process>()
 
     /**
      * Fire-and-forget: starts a process, reads its stdout in a background
@@ -12,11 +15,12 @@ object ProcessRunner {
     fun execFireAndForget(
         command: List<String>,
         workingDir: String? = null,
-    ) {
-        try {
+    ): Process? {
+        return try {
             val pb = ProcessBuilder(command).redirectErrorStream(true)
             if (workingDir != null) pb.directory(File(workingDir))
             val p = pb.start()
+            activeProcesses.add(p)
             Thread {
                 try {
                     p.inputStream.bufferedReader().useLines { lines ->
@@ -27,10 +31,14 @@ object ProcessRunner {
                         }
                     }
                 } catch (_: Exception) {
+                } finally {
+                    activeProcesses.remove(p)
                 }
             }.apply { isDaemon = true; start() }
+            p
         } catch (e: Exception) {
-            Logx.e("ProcessRunner", "exec failed: ${command.firstOrNull()}", e)
+            Logx.e(TAG, "exec failed: ${command.firstOrNull()}", e)
+            null
         }
     }
 
@@ -39,11 +47,24 @@ object ProcessRunner {
         if (!f.exists()) return
         try {
             val pid = f.readText().trim().toIntOrNull() ?: return
-            ProcessBuilder("kill", pid.toString()).start().waitFor(2, TimeUnit.SECONDS)
-        } catch (_: Exception) {
+            Logx.i(TAG, "Killing process PID $pid from $path via SIGKILL")
+            android.os.Process.sendSignal(pid, android.os.Process.SIGNAL_KILL)
+        } catch (e: Exception) {
+            Logx.w(TAG, "Failed to kill pid from $path: ${e.message}")
         } finally {
-            f.delete()
+            runCatching { f.delete() }
         }
     }
 
+    fun killAll() {
+        Logx.i(TAG, "killAll active daemon processes (count=${activeProcesses.size})")
+        for (p in activeProcesses) {
+            try {
+                if (p.isAlive) {
+                    p.destroyForcibly()
+                }
+            } catch (_: Exception) {}
+        }
+        activeProcesses.clear()
+    }
 }

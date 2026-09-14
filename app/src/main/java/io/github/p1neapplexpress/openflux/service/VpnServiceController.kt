@@ -96,9 +96,6 @@ class VpnServiceController(private val service: VpnService) {
 
             .addDnsServer(secDns)
 
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-            builder.setBlocking(killSwitch)
-        }
 
         when (ipType) {
             AppSettings.IP_TYPE_IPV4 -> {
