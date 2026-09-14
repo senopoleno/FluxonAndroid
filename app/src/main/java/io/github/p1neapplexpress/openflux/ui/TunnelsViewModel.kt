@@ -538,9 +538,9 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun probeLiveConnectivityWithLatency(proxy: java.net.Proxy): Long {
         val endpoints = listOf(
-            "http://cp.cloudflare.com/generate_204",
-            "http://connectivitycheck.gstatic.com/generate_204",
-            "http://detectportal.firefox.com/success.txt"
+            "https://cp.cloudflare.com/generate_204",
+            "https://connectivitycheck.gstatic.com/generate_204",
+            "https://detectportal.firefox.com/success.txt"
         )
         for (ep in endpoints) {
             try {

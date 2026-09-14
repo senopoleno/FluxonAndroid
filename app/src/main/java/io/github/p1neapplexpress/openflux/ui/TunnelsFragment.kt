@@ -156,7 +156,6 @@ class TunnelsFragment : BaseFragment() {
         dialog.setContentView(view)
 
         val inputEdit = view.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.input_link_value)
-        val btnPaste = view.findViewById<View>(R.id.btn_paste_link)
         val btnCancel = view.findViewById<View>(R.id.btn_cancel_import)
         val btnConfirm = view.findViewById<View>(R.id.btn_confirm_import)
 
@@ -166,14 +165,6 @@ class TunnelsFragment : BaseFragment() {
             if (it.startsWith("openflux://", ignoreCase = true) || it.startsWith("{") || it.startsWith("vless://") || it.startsWith("vmess://") || it.startsWith("http")) {
                 inputEdit.setText(it)
                 inputEdit.setSelection(it.length)
-            }
-        }
-
-        btnPaste.setOnClickListener {
-            val clip = clipboard?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()?.trim()
-            if (!clip.isNullOrBlank()) {
-                inputEdit.setText(clip)
-                inputEdit.setSelection(clip.length)
             }
         }
 

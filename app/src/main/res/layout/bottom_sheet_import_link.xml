@@ -86,19 +86,6 @@
         android:orientation="horizontal"
         android:gravity="center_vertical">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_paste_link"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="wrap_content"
-            android:layout_height="40dp"
-            android:text="@string/import_link_sheet_paste"
-            android:textSize="13sp"
-            app:icon="@drawable/ic_content_copy"
-            app:iconSize="16dp"
-            app:cornerRadius="10dp"
-            android:insetTop="0dp"
-            android:insetBottom="0dp" />
-
         <View
             android:layout_width="0dp"
             android:layout_height="1dp"

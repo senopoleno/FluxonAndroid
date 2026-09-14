@@ -235,9 +235,9 @@ class SocksVpnService : android.net.VpnService() {
             java.net.InetSocketAddress("127.0.0.1", port)
         )
         val endpoints = listOf(
-            "http://cp.cloudflare.com/generate_204",
-            "http://connectivitycheck.gstatic.com/generate_204",
-            "http://detectportal.firefox.com/success.txt"
+            "https://cp.cloudflare.com/generate_204",
+            "https://connectivitycheck.gstatic.com/generate_204",
+            "https://detectportal.firefox.com/success.txt"
         )
         for (ep in endpoints) {
             try {
