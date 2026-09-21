@@ -5,6 +5,7 @@ import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RadialGradient
 import android.graphics.Shader
@@ -43,6 +44,36 @@ class AuroraView @JvmOverloads constructor(
         addUpdateListener {
             breath = it.animatedValue as Float
             invalidate()
+        }
+    }
+
+    private val shaderMatrix = Matrix()
+    private var cachedShader: RadialGradient? = null
+    private var lastBaseRadius = 0f
+    private var lastShaderColor = 0
+    private var lastIntensity = -1f
+
+    private fun updateShaderIfNeeded(cx: Float, cy: Float, baseR: Float, color: Int, currentIntensity: Float) {
+        if (cachedShader == null || baseR != lastBaseRadius || color != lastShaderColor || currentIntensity != lastIntensity) {
+            lastBaseRadius = baseR
+            lastShaderColor = color
+            lastIntensity = currentIntensity
+
+            val a0 = (55 + 90 * currentIntensity).toInt().coerceIn(0, 160)
+            val rgb = color and 0x00FFFFFF
+            val c0 = (rgb or (a0 shl 24))
+            val c1 = (rgb or ((a0 * 55 / 100) shl 24))
+            val c2 = (rgb or ((a0 * 22 / 100) shl 24))
+            val c3 = (rgb or ((a0 * 6 / 100) shl 24))
+            val c4 = (rgb or 0x00000000)
+
+            cachedShader = RadialGradient(
+                cx, cy, baseR,
+                intArrayOf(c0, c1, c2, c3, c4),
+                GRADIENT_STOPS,
+                Shader.TileMode.CLAMP
+            )
+            paint.shader = cachedShader
         }
     }
 
@@ -102,26 +133,19 @@ class AuroraView @JvmOverloads constructor(
         val cx = width / 2f
         val cy = height / 2f
         val baseR = min(width, height) / 2f
-        
-        val radius = baseR * (0.92f + breath * 0.08f)
+        if (baseR <= 0f) return
 
-        
-        val a0 = (55 + 90 * intensity).toInt().coerceIn(0, 160)
-        val rgb = currentColor and 0x00FFFFFF
+        updateShaderIfNeeded(cx, cy, baseR, currentColor, intensity)
 
-        val c0 = (rgb or (a0 shl 24))          
-        val c1 = (rgb or ((a0 * 55 / 100) shl 24))   
-        val c2 = (rgb or ((a0 * 22 / 100) shl 24))   
-        val c3 = (rgb or ((a0 * 6 / 100) shl 24))    
-        val c4 = (rgb or 0x00000000)           
+        val scale = 0.92f + breath * 0.08f
+        shaderMatrix.setScale(scale, scale, cx, cy)
+        cachedShader?.setLocalMatrix(shaderMatrix)
 
-        paint.shader = RadialGradient(
-            cx, cy, radius,
-            intArrayOf(c0, c1, c2, c3, c4),
-            floatArrayOf(0.00f, 0.28f, 0.52f, 0.76f, 1.00f),
-            Shader.TileMode.CLAMP,
-        )
+        val currentRadius = baseR * scale
+        canvas.drawCircle(cx, cy, currentRadius, paint)
+    }
 
-        canvas.drawCircle(cx, cy, radius, paint)
+    companion object {
+        private val GRADIENT_STOPS = floatArrayOf(0.00f, 0.28f, 0.52f, 0.76f, 1.00f)
     }
 }

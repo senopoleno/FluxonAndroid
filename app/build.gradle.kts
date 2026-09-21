@@ -12,8 +12,8 @@ android {
         applicationId = "io.github.p1neapplexpress.openflux"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.1.0"
+        versionCode = 6
+        versionName = "1.2.1"
 
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
@@ -28,7 +28,12 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfig = signingConfigs.getByName("debug")
         }
         debug {
@@ -67,11 +72,21 @@ dependencies {
     implementation("androidx.fragment:fragment-ktx:1.8.2")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
-    implementation("androidx.viewpager2:viewpager2:1.1.0")
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.google.android.material:material:1.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-    implementation("io.github.g00fy2.quickie:quickie-bundled:1.10.0")
+    implementation("io.github.g00fy2.quickie:quickie-unbundled:1.10.0")
     implementation("com.google.zxing:core:3.5.3")
+}
+
+tasks.matching { it.name == "assembleRelease" }.configureEach {
+    doLast {
+        val releaseDir = layout.buildDirectory.dir("outputs/apk/release").get().asFile
+        val apkFile = releaseDir.listFiles()?.firstOrNull { it.extension == "apk" }
+            ?: layout.buildDirectory.file("outputs/apk/release/app-release.apk").get().asFile
+        if (apkFile.exists()) {
+            val dest = rootProject.file("Fluxon.apk")
+            apkFile.copyTo(dest, overwrite = true)
+        }
+    }
 }

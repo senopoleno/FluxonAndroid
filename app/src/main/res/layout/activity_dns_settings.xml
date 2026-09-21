@@ -58,10 +58,10 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:layout_marginBottom="16dp"
-                app:cardBackgroundColor="@color/bg_card"
+                app:cardBackgroundColor="@color/m3_surface_container_low"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeColor="@color/bg_card_stroke">
+                app:strokeColor="@color/m3_outline_variant">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -74,7 +74,7 @@
                         android:layout_width="24dp"
                         android:layout_height="24dp"
                         android:src="@drawable/ic_dns"
-                        app:tint="@color/accent_blue"
+                        app:tint="@color/m3_primary"
                         android:importantForAccessibility="no" />
 
                     <LinearLayout
@@ -121,10 +121,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
-                app:cardBackgroundColor="@color/bg_card"
+                app:cardBackgroundColor="@color/m3_surface_container_low"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeColor="@color/bg_card_stroke">
+                app:strokeColor="@color/m3_outline_variant">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -142,7 +142,7 @@
                             android:layout_width="24dp"
                             android:layout_height="24dp"
                             android:src="@drawable/ic_dns"
-                            app:tint="@color/accent_blue"
+                            app:tint="@color/m3_primary"
                             android:importantForAccessibility="no" />
 
                         <LinearLayout
@@ -191,14 +191,14 @@
                         <View
                             android:layout_width="match_parent"
                             android:layout_height="1dp"
-                            android:background="@color/bg_card_stroke"
+                            android:background="@color/m3_outline_variant"
                             android:layout_marginBottom="10dp" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="@string/dns_doh_provider"
-                            android:textColor="@color/accent_blue"
+                            android:textColor="@color/m3_primary"
                             android:textSize="12sp"
                             android:fontFamily="sans-serif-medium"
                             android:textAllCaps="true"
@@ -210,7 +210,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content">
 
-                            <RadioButton
+                            <com.google.android.material.radiobutton.MaterialRadioButton
                                 android:id="@+id/radio_doh_cloudflare"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
@@ -219,7 +219,7 @@
                                 android:textSize="14sp"
                                 android:paddingVertical="4dp" />
 
-                            <RadioButton
+                            <com.google.android.material.radiobutton.MaterialRadioButton
                                 android:id="@+id/radio_doh_google"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
@@ -228,7 +228,7 @@
                                 android:textSize="14sp"
                                 android:paddingVertical="4dp" />
 
-                            <RadioButton
+                            <com.google.android.material.radiobutton.MaterialRadioButton
                                 android:id="@+id/radio_doh_adguard"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
@@ -237,7 +237,7 @@
                                 android:textSize="14sp"
                                 android:paddingVertical="4dp" />
 
-                            <RadioButton
+                            <com.google.android.material.radiobutton.MaterialRadioButton
                                 android:id="@+id/radio_doh_quad9"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
@@ -246,7 +246,16 @@
                                 android:textSize="14sp"
                                 android:paddingVertical="4dp" />
 
-                            <RadioButton
+                            <com.google.android.material.radiobutton.MaterialRadioButton
+                                android:id="@+id/radio_doh_xbox"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/settings_dns_xbox"
+                                android:textColor="@color/text_primary"
+                                android:textSize="14sp"
+                                android:paddingVertical="4dp" />
+
+                            <com.google.android.material.radiobutton.MaterialRadioButton
                                 android:id="@+id/radio_doh_custom"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
@@ -265,10 +274,10 @@
                             android:layout_marginTop="8dp"
                             android:hint="https://example.com/dns-query"
                             android:visibility="gone"
-                            app:boxCornerRadiusBottomEnd="10dp"
-                            app:boxCornerRadiusBottomStart="10dp"
-                            app:boxCornerRadiusTopEnd="10dp"
-                            app:boxCornerRadiusTopStart="10dp">
+                            app:boxCornerRadiusBottomEnd="12dp"
+                            app:boxCornerRadiusBottomStart="12dp"
+                            app:boxCornerRadiusTopEnd="12dp"
+                            app:boxCornerRadiusTopStart="12dp">
 
                             <com.google.android.material.textfield.TextInputEditText
                                 android:id="@+id/input_doh_custom_url"
@@ -291,10 +300,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
-                app:cardBackgroundColor="@color/bg_card"
+                app:cardBackgroundColor="@color/m3_surface_container_low"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeColor="@color/bg_card_stroke">
+                app:strokeColor="@color/m3_outline_variant">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -306,7 +315,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/dns_servers_section"
-                        android:textColor="@color/accent_blue"
+                        android:textColor="@color/m3_primary"
                         android:textSize="12sp"
                         android:fontFamily="sans-serif-medium"
                         android:textAllCaps="true"
@@ -318,7 +327,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content">
 
-                        <RadioButton
+                        <com.google.android.material.radiobutton.MaterialRadioButton
                             android:id="@+id/radio_dns_cloudflare"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -327,7 +336,7 @@
                             android:textSize="14sp"
                             android:paddingVertical="4dp" />
 
-                        <RadioButton
+                        <com.google.android.material.radiobutton.MaterialRadioButton
                             android:id="@+id/radio_dns_google"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -336,7 +345,7 @@
                             android:textSize="14sp"
                             android:paddingVertical="4dp" />
 
-                        <RadioButton
+                        <com.google.android.material.radiobutton.MaterialRadioButton
                             android:id="@+id/radio_dns_adguard"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -345,7 +354,7 @@
                             android:textSize="14sp"
                             android:paddingVertical="4dp" />
 
-                        <RadioButton
+                        <com.google.android.material.radiobutton.MaterialRadioButton
                             android:id="@+id/radio_dns_quad9"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -354,7 +363,16 @@
                             android:textSize="14sp"
                             android:paddingVertical="4dp" />
 
-                        <RadioButton
+                        <com.google.android.material.radiobutton.MaterialRadioButton
+                            android:id="@+id/radio_dns_xbox"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_dns_xbox"
+                            android:textColor="@color/text_primary"
+                            android:textSize="14sp"
+                            android:paddingVertical="4dp" />
+
+                        <com.google.android.material.radiobutton.MaterialRadioButton
                             android:id="@+id/radio_dns_custom"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -378,10 +396,10 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:hint="@string/settings_dns_custom_primary_hint"
-                            app:boxCornerRadiusBottomEnd="10dp"
-                            app:boxCornerRadiusBottomStart="10dp"
-                            app:boxCornerRadiusTopEnd="10dp"
-                            app:boxCornerRadiusTopStart="10dp">
+                            app:boxCornerRadiusBottomEnd="12dp"
+                            app:boxCornerRadiusBottomStart="12dp"
+                            app:boxCornerRadiusTopEnd="12dp"
+                            app:boxCornerRadiusTopStart="12dp">
 
                             <com.google.android.material.textfield.TextInputEditText
                                 android:id="@+id/input_custom_dns_primary"
@@ -398,10 +416,10 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"
                             android:hint="@string/settings_dns_custom_secondary_hint"
-                            app:boxCornerRadiusBottomEnd="10dp"
-                            app:boxCornerRadiusBottomStart="10dp"
-                            app:boxCornerRadiusTopEnd="10dp"
-                            app:boxCornerRadiusTopStart="10dp">
+                            app:boxCornerRadiusBottomEnd="12dp"
+                            app:boxCornerRadiusBottomStart="12dp"
+                            app:boxCornerRadiusTopEnd="12dp"
+                            app:boxCornerRadiusTopStart="12dp">
 
                             <com.google.android.material.textfield.TextInputEditText
                                 android:id="@+id/input_custom_dns_secondary"

@@ -42,12 +42,14 @@
     </FrameLayout>
 
     <!-- QR container with solid white background for high contrast -->
-    <androidx.cardview.widget.CardView
+    <com.google.android.material.card.MaterialCardView
         android:layout_width="250dp"
         android:layout_height="250dp"
         android:layout_marginTop="16dp"
         app:cardCornerRadius="16dp"
-        app:cardElevation="3dp"
+        app:cardElevation="0dp"
+        app:strokeWidth="1dp"
+        app:strokeColor="@color/m3_outline_variant"
         app:cardBackgroundColor="#FFFFFF">
 
         <ImageView
@@ -57,7 +59,7 @@
             android:padding="12dp"
             android:contentDescription="@string/qr_dialog_title" />
 
-    </androidx.cardview.widget.CardView>
+    </com.google.android.material.card.MaterialCardView>
 
     <!-- Actions: Share (top) and Copy (bottom) buttons -->
     <LinearLayout
@@ -72,15 +74,15 @@
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:text="@string/btn_share"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/m3_on_primary"
             android:textSize="14sp"
             android:fontFamily="sans-serif-medium"
             app:icon="@drawable/ic_share"
             app:iconSize="18dp"
-            app:iconTint="#FFFFFF"
+            app:iconTint="@color/m3_on_primary"
             app:iconPadding="8dp"
             app:iconGravity="textStart"
-            app:backgroundTint="@color/accent_blue"
+            app:backgroundTint="@color/m3_primary"
             app:cornerRadius="12dp"
             android:insetTop="0dp"
             android:insetBottom="0dp" />
@@ -100,7 +102,7 @@
             app:iconTint="@color/text_primary"
             app:iconPadding="8dp"
             app:iconGravity="textStart"
-            app:strokeColor="@color/bg_card_stroke"
+            app:strokeColor="@color/m3_outline_variant"
             app:cornerRadius="12dp"
             android:insetTop="0dp"
             android:insetBottom="0dp" />

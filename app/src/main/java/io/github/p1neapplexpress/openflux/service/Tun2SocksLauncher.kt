@@ -44,13 +44,15 @@ class Tun2SocksLauncher(private val context: Context) {
         val pdnsdBin = "$nativeDir/libpdnsd.so"
         val tun2socksBin = "$nativeDir/libtun2socks.so"
 
-        val sockPath = File(context.applicationInfo.dataDir, "sock_path").apply {
-            if (!exists()) {
-                runCatching { createNewFile() }
-                    .onFailure { Logx.w(TAG, "Failed to create sock_path: ${it.message}") }
+        val sockPath = File(context.filesDir, "sock_path").apply {
+            if (exists()) {
+                runCatching { delete() }
             }
-            setWritable(true, false)
-            setReadable(true, false)
+            runCatching {
+                createNewFile()
+                setWritable(true, true) // ownerOnly = true
+                setReadable(true, true) // ownerOnly = true
+            }.onFailure { Logx.w(TAG, "Failed to create sock_path: ${it.message}") }
         }
 
         
@@ -95,6 +97,7 @@ class Tun2SocksLauncher(private val context: Context) {
         ProcessRunner.killPidFile("${context.filesDir}/tun2socks.pid")
         ProcessRunner.killPidFile("${context.filesDir}/pdnsd.pid")
         ProcessRunner.killAll()
+        runCatching { File(context.filesDir, "sock_path").delete() }
         runCatching { File(context.applicationInfo.dataDir, "sock_path").delete() }
     }
 
@@ -120,9 +123,9 @@ class Tun2SocksLauncher(private val context: Context) {
         add("--loglevel"); add(logLevel)
         add("--pid"); add("${context.filesDir}/tun2socks.pid")
         add("--sock"); add(sockPath.absolutePath)
-        if (!user.isNullOrEmpty()) {
+        if (server != "127.0.0.1" && server != "localhost" && !user.isNullOrEmpty() && !passwd.isNullOrEmpty()) {
             add("--username"); add(user)
-            add("--password"); add(passwd ?: "")
+            add("--password"); add(passwd)
         }
         if (ipv6) { add("--netif-ip6addr"); add(NETIF_IP6ADDR) }
         add("--dnsgw"); add(DNS_GW)

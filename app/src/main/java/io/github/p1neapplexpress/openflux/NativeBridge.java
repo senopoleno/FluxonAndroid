@@ -36,9 +36,8 @@ public final class NativeBridge {
             java.lang.System.loadLibrary("system");
             sLoaded = true;
             Log.i(TAG, "Native libraries loaded");
-        } catch (UnsatisfiedLinkError e) {
-            Log.e(TAG, "Failed to load native libraries", e);
-            throw new RuntimeException("Native library load failure", e);
+        } catch (Throwable e) {
+            Log.w(TAG, "Legacy native libraries not loaded (using FluxonCore): " + e.getMessage());
         }
     }
 
@@ -78,4 +77,5 @@ public final class NativeBridge {
 
     public static native int sendfd(int fd, String sock);
     public static native void jniclose(int fd);
+    public static native int setParentDeathSignal(int sig);
 }

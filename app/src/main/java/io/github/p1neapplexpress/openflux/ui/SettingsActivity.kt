@@ -9,10 +9,13 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.HapticFeedbackConstants
 import android.view.View
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -22,6 +25,7 @@ import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.textfield.TextInputEditText
 import io.github.p1neapplexpress.openflux.BuildConfig
 import io.github.p1neapplexpress.openflux.R
+import io.github.p1neapplexpress.openflux.util.AppIconManager
 import io.github.p1neapplexpress.openflux.util.AppSettings
 import io.github.p1neapplexpress.openflux.util.AppUpdateChecker
 import io.github.p1neapplexpress.openflux.util.ConfigBackupManager
@@ -29,6 +33,7 @@ import io.github.p1neapplexpress.openflux.util.DomainRulesPreferences
 import io.github.p1neapplexpress.openflux.util.LocalSocksSession
 import io.github.p1neapplexpress.openflux.util.SplitTunnelPreferences
 import io.github.p1neapplexpress.openflux.util.ThemePreferences
+import io.github.p1neapplexpress.openflux.util.performAppHaptics
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -38,16 +43,15 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var themePrefs: ThemePreferences
     private lateinit var splitPrefs: SplitTunnelPreferences
 
-    private lateinit var themeToggleGroup: MaterialButtonToggleGroup
     private lateinit var textSplitTunnelSummary: TextView
     private lateinit var textDnsSummary: TextView
     private lateinit var textMtuSummary: TextView
     private lateinit var textIpTypeSummary: TextView
+    private lateinit var switchHapticFeedback: MaterialSwitch
+    private lateinit var textLanguageSummary: TextView
+    private lateinit var textAppIconSummary: TextView
 
     private lateinit var switchBypassLan: MaterialSwitch
-    private lateinit var switchNotifySpeed: MaterialSwitch
-    private lateinit var switchMemoryMonitor: MaterialSwitch
-    private lateinit var switchShowPing: MaterialSwitch
 
     private lateinit var switchKillSwitch: MaterialSwitch
     private lateinit var switchHotspot: MaterialSwitch
@@ -114,10 +118,10 @@ class SettingsActivity : AppCompatActivity() {
 
         initViews()
         setupTopBar()
-        setupAppearance()
-        setupNetwork()
         setupInterface()
+        setupNetwork()
         setupAutomation()
+        setupLogs()
         setupBackup()
         setupUpdates()
         setupAbout()
@@ -129,19 +133,22 @@ class SettingsActivity : AppCompatActivity() {
         updateDnsSummary()
         updateMtuSummary()
         updateIpTypeSummary()
+        updateLanguageSummary()
+        updateAppIconSummary()
+        updateBatteryOptStatus()
     }
 
     private fun initViews() {
-        themeToggleGroup = findViewById(R.id.theme_toggle_group)
         textSplitTunnelSummary = findViewById(R.id.text_split_tunnel_summary)
         textDnsSummary = findViewById(R.id.text_dns_summary)
         textMtuSummary = findViewById(R.id.text_mtu_summary)
         textIpTypeSummary = findViewById(R.id.text_ip_type_summary)
 
+        switchHapticFeedback = findViewById(R.id.switch_haptic_feedback)
+        textLanguageSummary = findViewById(R.id.text_language_summary)
+        textAppIconSummary = findViewById(R.id.text_app_icon_summary)
+
         switchBypassLan = findViewById(R.id.switch_bypass_lan)
-        switchNotifySpeed = findViewById(R.id.switch_notify_speed)
-        switchMemoryMonitor = findViewById(R.id.switch_memory_monitor)
-        switchShowPing = findViewById(R.id.switch_show_ping)
 
         switchKillSwitch = findViewById(R.id.switch_kill_switch)
         switchHotspot = findViewById(R.id.switch_hotspot)
@@ -156,53 +163,30 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun setupTopBar() {
         findViewById<View>(R.id.btn_back).setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             finish()
         }
     }
 
-    private fun setupAppearance() {
-        val checkedBtnId = when (themePrefs.themeMode) {
-            ThemePreferences.THEME_LIGHT -> R.id.btn_theme_light
-            ThemePreferences.THEME_DARK -> R.id.btn_theme_dark
-            else -> R.id.btn_theme_system
-        }
-        themeToggleGroup.check(checkedBtnId)
-
-        themeToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
-            if (isChecked) {
-                val newMode = when (checkedId) {
-                    R.id.btn_theme_light -> ThemePreferences.THEME_LIGHT
-                    R.id.btn_theme_dark -> ThemePreferences.THEME_DARK
-                    else -> ThemePreferences.THEME_SYSTEM
-                }
-                if (newMode != themePrefs.themeMode) {
-                    themePrefs.themeMode = newMode
-                    themePrefs.applyTheme()
-                    overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
-                }
-            }
-        }
-    }
 
     private fun setupNetwork() {
         // 1. Split Tunneling
         findViewById<View>(R.id.row_split_tunnel).setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             startActivity(Intent(this, SplitTunnelActivity::class.java))
         }
         updateSplitTunnelSummary()
 
         // 2. DNS
         findViewById<View>(R.id.row_dns).setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             startActivity(Intent(this, DnsSettingsActivity::class.java))
         }
         updateDnsSummary()
 
         // 3. MTU BottomSheet
         findViewById<View>(R.id.row_mtu).setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             MtuBottomSheetDialog(this, appSettings.mtu) { newMtu ->
                 appSettings.mtu = newMtu
                 updateMtuSummary()
@@ -212,7 +196,7 @@ class SettingsActivity : AppCompatActivity() {
 
         // 4. IP Type
         findViewById<View>(R.id.row_ip_type).setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             showIpTypeBottomSheet()
         }
         updateIpTypeSummary()
@@ -223,25 +207,48 @@ class SettingsActivity : AppCompatActivity() {
         switchBypassLan.setOnCheckedChangeListener { _, isChecked ->
             appSettings.bypassLan = isChecked
         }
+        switchBypassLan.setOnClickListener {
+            switchBypassLan.performAppHaptics()
+        }
+        findViewById<View>(R.id.row_bypass_lan).setOnClickListener {
+            it.performAppHaptics()
+            switchBypassLan.toggle()
+        }
     }
 
     private fun setupInterface() {
-        switchNotifySpeed.isChecked = appSettings.showNotificationSpeed
-        switchNotifySpeed.jumpDrawablesToCurrentState()
-        switchNotifySpeed.setOnCheckedChangeListener { _, isChecked ->
-            appSettings.showNotificationSpeed = isChecked
+        // 1. Appearance (Внешний вид)
+        findViewById<View>(R.id.row_appearance_elements)?.setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
+            startActivity(Intent(this, AppearanceActivity::class.java))
         }
 
-        switchMemoryMonitor.isChecked = appSettings.showMemoryUsage
-        switchMemoryMonitor.jumpDrawablesToCurrentState()
-        switchMemoryMonitor.setOnCheckedChangeListener { _, isChecked ->
-            appSettings.showMemoryUsage = isChecked
+        // 2. Haptic Feedback (Виброотклик)
+        switchHapticFeedback.isChecked = appSettings.hapticFeedback
+        switchHapticFeedback.jumpDrawablesToCurrentState()
+        switchHapticFeedback.setOnCheckedChangeListener { _, isChecked ->
+            appSettings.hapticFeedback = isChecked
+        }
+        switchHapticFeedback.setOnClickListener {
+            switchHapticFeedback.performAppHaptics()
+        }
+        findViewById<View>(R.id.row_haptic_feedback)?.setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
+            switchHapticFeedback.toggle()
         }
 
-        switchShowPing.isChecked = appSettings.showPingInMainMenu
-        switchShowPing.jumpDrawablesToCurrentState()
-        switchShowPing.setOnCheckedChangeListener { _, isChecked ->
-            appSettings.showPingInMainMenu = isChecked
+        // 3. App Language (Язык приложения)
+        updateLanguageSummary()
+        findViewById<View>(R.id.row_language)?.setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
+            showLanguageBottomSheet()
+        }
+
+        // 4. App Icon (Иконка приложения)
+        updateAppIconSummary()
+        findViewById<View>(R.id.row_app_icon)?.setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
+            showAppIconBottomSheet()
         }
     }
 
@@ -258,12 +265,12 @@ class SettingsActivity : AppCompatActivity() {
                 } catch (_: Exception) { }
             }
         }
+        switchKillSwitch.setOnClickListener {
+            switchKillSwitch.performAppHaptics()
+        }
         findViewById<View>(R.id.row_kill_switch).setOnClickListener {
-            try {
-                startActivity(Intent(Settings.ACTION_VPN_SETTINGS))
-            } catch (_: Exception) {
-                switchKillSwitch.toggle()
-            }
+            it.performAppHaptics()
+            switchKillSwitch.toggle()
         }
 
         // 2. Hotspot Proxy Sharing
@@ -285,7 +292,11 @@ class SettingsActivity : AppCompatActivity() {
                 io.github.p1neapplexpress.openflux.service.HotspotProxyBridge.stop()
             }
         }
+        switchHotspot.setOnClickListener {
+            switchHotspot.performAppHaptics()
+        }
         findViewById<View>(R.id.row_hotspot).setOnClickListener {
+            it.performAppHaptics()
             showHotspotBottomSheet()
         }
 
@@ -295,15 +306,48 @@ class SettingsActivity : AppCompatActivity() {
         switchSocks5Auth.setOnCheckedChangeListener { _, isChecked ->
             appSettings.socks5AuthEnabled = isChecked
         }
+        switchSocks5Auth.setOnClickListener {
+            switchSocks5Auth.performAppHaptics()
+        }
         findViewById<View>(R.id.row_socks5_auth).setOnClickListener {
+            it.performAppHaptics()
             showSocks5AuthBottomSheet()
         }
 
-        // 4. Failover
+        // 4. Proxy-only mode (no VPN, no TUN, no key icon)
+        val switchProxyOnly = findViewById<com.google.android.material.materialswitch.MaterialSwitch?>(R.id.switch_proxy_only_mode)
+        switchProxyOnly?.let { sw ->
+            sw.isChecked = appSettings.proxyOnlyMode
+            sw.jumpDrawablesToCurrentState()
+            sw.setOnCheckedChangeListener { _, isChecked ->
+                appSettings.proxyOnlyMode = isChecked
+                if (isChecked) {
+                    Toast.makeText(
+                        this,
+                        "Режим прокси: VPN-иконка не будет показана. Перезапустите туннель.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+            sw.setOnClickListener { sw.performAppHaptics() }
+        }
+        findViewById<View?>(R.id.row_proxy_only_mode)?.setOnClickListener {
+            it.performAppHaptics()
+            switchProxyOnly?.toggle()
+        }
+
+        // 5. Failover
         switchFailover.isChecked = appSettings.autoFailover
         switchFailover.jumpDrawablesToCurrentState()
         switchFailover.setOnCheckedChangeListener { _, isChecked ->
             appSettings.autoFailover = isChecked
+        }
+        switchFailover.setOnClickListener {
+            switchFailover.performAppHaptics()
+        }
+        findViewById<View>(R.id.row_failover).setOnClickListener {
+            it.performAppHaptics()
+            switchFailover.toggle()
         }
 
         // 5. Auto-boot
@@ -312,23 +356,101 @@ class SettingsActivity : AppCompatActivity() {
         switchAutoBoot.setOnCheckedChangeListener { _, isChecked ->
             appSettings.autoConnectOnBoot = isChecked
         }
+        switchAutoBoot.setOnClickListener {
+            switchAutoBoot.performAppHaptics()
+        }
+        findViewById<View>(R.id.row_auto_boot).setOnClickListener {
+            it.performAppHaptics()
+            switchAutoBoot.toggle()
+        }
 
-        // 6. Auto-clear logs
+        // 6. Battery Optimization
+        findViewById<View>(R.id.row_battery_opt)?.setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
+            requestIgnoreBatteryOptimizations()
+        }
+        updateBatteryOptStatus()
+    }
+
+    private fun updateBatteryOptStatus() {
+        val subtitle = findViewById<TextView>(R.id.text_battery_opt_subtitle) ?: return
+        val isIgnored = isBatteryOptimizationIgnored()
+        if (isIgnored) {
+            subtitle.text = getString(R.string.battery_opt_disabled)
+            subtitle.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.colorSuccess))
+        } else {
+            subtitle.text = getString(R.string.battery_opt_enabled)
+            subtitle.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.text_secondary))
+        }
+    }
+
+    private fun isBatteryOptimizationIgnored(): Boolean {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            val pm = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+            return pm?.isIgnoringBatteryOptimizations(packageName) == true
+        }
+        return true
+    }
+
+    private fun requestIgnoreBatteryOptimizations() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            val isIgnored = isBatteryOptimizationIgnored()
+            if (!isIgnored) {
+                try {
+                    @android.annotation.SuppressLint("BatteryLife")
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                    return
+                } catch (e: Exception) {
+                    // Fallback to general settings
+                }
+            }
+            try {
+                val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                startActivity(intent)
+            } catch (e: Exception) {
+                try {
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.fromParts("package", packageName, null)
+                    }
+                    startActivity(intent)
+                } catch (e2: Exception) {
+                    Toast.makeText(this, "Не удалось открыть настройки батареи", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private fun setupLogs() {
+        findViewById<View>(R.id.row_event_logs)?.setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
+            startActivity(Intent(this, LogsActivity::class.java))
+        }
+
         switchAutoClearLogs.isChecked = appSettings.autoClearLogs
         switchAutoClearLogs.jumpDrawablesToCurrentState()
         switchAutoClearLogs.setOnCheckedChangeListener { _, isChecked ->
             appSettings.autoClearLogs = isChecked
         }
+        switchAutoClearLogs.setOnClickListener {
+            switchAutoClearLogs.performAppHaptics()
+        }
+        findViewById<View>(R.id.row_auto_clear_logs).setOnClickListener {
+            it.performAppHaptics()
+            switchAutoClearLogs.toggle()
+        }
     }
 
     private fun setupBackup() {
         findViewById<View>(R.id.row_export_backup).setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             exportBackupLauncher.launch("fluxon_backup.json")
         }
 
         findViewById<View>(R.id.row_import_backup).setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             importBackupLauncher.launch(arrayOf("application/json", "*/*"))
         }
     }
@@ -339,9 +461,16 @@ class SettingsActivity : AppCompatActivity() {
         switchAutoUpdate.setOnCheckedChangeListener { _, isChecked ->
             appSettings.autoUpdateCheck = isChecked
         }
+        switchAutoUpdate.setOnClickListener {
+            switchAutoUpdate.performAppHaptics()
+        }
+        findViewById<View>(R.id.row_auto_update).setOnClickListener {
+            it.performAppHaptics()
+            switchAutoUpdate.toggle()
+        }
 
         findViewById<View>(R.id.row_check_update_now).setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             Toast.makeText(this, R.string.update_checking, Toast.LENGTH_SHORT).show()
             AppUpdateChecker.checkForUpdate(this, force = true) { hasUpdate, versionOrError ->
                 if (!hasUpdate) {
@@ -371,10 +500,10 @@ class SettingsActivity : AppCompatActivity() {
 
             if (versionClickCount >= 5) {
                 versionClickCount = 0
-                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                view.performAppHaptics(HapticFeedbackConstants.CONFIRM)
                 DebugMenuHelper.show(this)
             } else if (versionClickCount >= 2) {
-                view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                view.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
                 val remaining = 5 - versionClickCount
                 val msg = if (remaining == 1) {
                     getString(R.string.debug_click_step_one)
@@ -387,6 +516,16 @@ class SettingsActivity : AppCompatActivity() {
 
         findViewById<View>(R.id.row_version)?.setOnClickListener(onVersionClicked)
         textVersion.setOnClickListener(onVersionClicked)
+
+        findViewById<View>(R.id.row_github)?.setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
+            try {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/senopoleno/FluxonAndroid"))
+                startActivity(intent)
+            } catch (e: Exception) {
+                Toast.makeText(this, R.string.error_open_browser, Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun updateSplitTunnelSummary() {
@@ -406,13 +545,17 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun updateDnsSummary() {
         textDnsSummary.text = when {
-            appSettings.useSystemDns -> "${getString(R.string.dns_use_system_title)} (${appSettings.primaryDns})"
+            appSettings.useSystemDns -> {
+                val sysDns = appSettings.systemPrimaryDns ?: appSettings.primaryDns
+                "${getString(R.string.dns_use_system_title)} ($sysDns)"
+            }
             appSettings.dohEnabled -> {
                 val providerName = when (appSettings.dohProvider) {
                     AppSettings.DOH_PROVIDER_CLOUDFLARE -> "Cloudflare"
                     AppSettings.DOH_PROVIDER_GOOGLE -> "Google"
                     AppSettings.DOH_PROVIDER_ADGUARD -> "AdGuard"
                     AppSettings.DOH_PROVIDER_QUAD9 -> "Quad9"
+                    AppSettings.DOH_PROVIDER_XBOX -> "Xbox DNS"
                     AppSettings.DOH_PROVIDER_CUSTOM -> "Custom"
                     else -> "Cloudflare"
                 }
@@ -423,6 +566,7 @@ class SettingsActivity : AppCompatActivity() {
                 AppSettings.DNS_MODE_GOOGLE -> "Google"
                 AppSettings.DNS_MODE_ADGUARD -> "AdGuard DNS"
                 AppSettings.DNS_MODE_QUAD9 -> "Quad9"
+                AppSettings.DNS_MODE_XBOX -> "Xbox DNS"
                 AppSettings.DNS_MODE_CUSTOM -> "${getString(R.string.settings_dns_custom)} (${appSettings.primaryDns})"
                 else -> "Cloudflare"
             }
@@ -446,23 +590,49 @@ class SettingsActivity : AppCompatActivity() {
         val view = layoutInflater.inflate(R.layout.bottom_sheet_ip_type, null)
         dialog.setContentView(view)
 
-        val cardAuto = view.findViewById<View>(R.id.card_ip_auto)
-        val cardIpv4 = view.findViewById<View>(R.id.card_ip_v4)
-        val cardIpv6 = view.findViewById<View>(R.id.card_ip_v6)
+        val cardAuto = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_ip_auto)
+        val cardIpv4 = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_ip_v4)
+        val cardIpv6 = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_ip_v6)
+        val btnCancel = view.findViewById<View>(R.id.btn_cancel_ip_type)
 
-        cardAuto.setOnClickListener {
+        val primaryColor = androidx.core.content.ContextCompat.getColor(this, R.color.m3_primary)
+        val activeStrokeWidth = (2 * resources.displayMetrics.density).toInt()
+
+        when (appSettings.ipType) {
+            AppSettings.IP_TYPE_AUTO -> {
+                cardAuto?.strokeColor = primaryColor
+                cardAuto?.strokeWidth = activeStrokeWidth
+            }
+            AppSettings.IP_TYPE_IPV4 -> {
+                cardIpv4?.strokeColor = primaryColor
+                cardIpv4?.strokeWidth = activeStrokeWidth
+            }
+            AppSettings.IP_TYPE_IPV6 -> {
+                cardIpv6?.strokeColor = primaryColor
+                cardIpv6?.strokeWidth = activeStrokeWidth
+            }
+        }
+
+        cardAuto?.setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             appSettings.ipType = AppSettings.IP_TYPE_AUTO
             updateIpTypeSummary()
             dialog.dismiss()
         }
-        cardIpv4.setOnClickListener {
+        cardIpv4?.setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             appSettings.ipType = AppSettings.IP_TYPE_IPV4
             updateIpTypeSummary()
             dialog.dismiss()
         }
-        cardIpv6.setOnClickListener {
+        cardIpv6?.setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             appSettings.ipType = AppSettings.IP_TYPE_IPV6
             updateIpTypeSummary()
+            dialog.dismiss()
+        }
+        btnCancel?.setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             dialog.dismiss()
         }
         dialog.show()
@@ -485,7 +655,7 @@ class SettingsActivity : AppCompatActivity() {
         textPort.text = port.toString()
 
         btnCopy.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip = ClipData.newPlainText("SOCKS5 Proxy", "$ip:$port")
             clipboard.setPrimaryClip(clip)
@@ -516,7 +686,7 @@ class SettingsActivity : AppCompatActivity() {
         btnCancel.setOnClickListener { dialog.dismiss() }
 
         btnSave.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             appSettings.socks5CustomUser = inputUser.text?.toString().orEmpty().trim()
             appSettings.socks5CustomPass = inputPass.text?.toString().orEmpty().trim()
             dialog.dismiss()
@@ -548,7 +718,7 @@ class SettingsActivity : AppCompatActivity() {
                     }
 
                     btnConfirm.setOnClickListener {
-                        it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                        it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
                         dialog.dismiss()
                         lifecycleScope.launch {
                             val applyResult = ConfigBackupManager.applyBackup(this@SettingsActivity, backup)
@@ -583,5 +753,137 @@ class SettingsActivity : AppCompatActivity() {
                 }
             )
         }
+    }
+
+    private fun updateLanguageSummary() {
+        if (!::textLanguageSummary.isInitialized) return
+        textLanguageSummary.text = when (appSettings.appLanguage) {
+            "ru" -> getString(R.string.settings_language_ru)
+            "en" -> getString(R.string.settings_language_en)
+            else -> getString(R.string.settings_language_system)
+        }
+    }
+
+    private fun showLanguageBottomSheet() {
+        val dialog = BottomSheetDialog(this)
+        val view = layoutInflater.inflate(R.layout.bottom_sheet_language, null)
+        dialog.setContentView(view)
+
+        val cardSystem = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_lang_system)
+        val cardRu = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_lang_ru)
+        val cardEn = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_lang_en)
+
+        val checkSystem = view.findViewById<ImageView>(R.id.check_lang_system)
+        val checkRu = view.findViewById<ImageView>(R.id.check_lang_ru)
+        val checkEn = view.findViewById<ImageView>(R.id.check_lang_en)
+
+        val btnCancel = view.findViewById<View>(R.id.btn_cancel_language)
+
+        val primaryColor = androidx.core.content.ContextCompat.getColor(this, R.color.m3_primary)
+        val activeStrokeWidth = (2 * resources.displayMetrics.density).toInt()
+
+        when (appSettings.appLanguage) {
+            "ru" -> {
+                cardRu?.strokeColor = primaryColor
+                cardRu?.strokeWidth = activeStrokeWidth
+                checkRu?.visibility = View.VISIBLE
+            }
+            "en" -> {
+                cardEn?.strokeColor = primaryColor
+                cardEn?.strokeWidth = activeStrokeWidth
+                checkEn?.visibility = View.VISIBLE
+            }
+            else -> {
+                cardSystem?.strokeColor = primaryColor
+                cardSystem?.strokeWidth = activeStrokeWidth
+                checkSystem?.visibility = View.VISIBLE
+            }
+        }
+
+        fun selectLanguage(tag: String) {
+            appSettings.appLanguage = tag
+            updateLanguageSummary()
+            val appLocales = if (tag == "system") {
+                LocaleListCompat.getEmptyLocaleList()
+            } else {
+                LocaleListCompat.forLanguageTags(tag)
+            }
+            AppCompatDelegate.setApplicationLocales(appLocales)
+            dialog.dismiss()
+        }
+
+        cardSystem?.setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
+            selectLanguage("system")
+        }
+        cardRu?.setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
+            selectLanguage("ru")
+        }
+        cardEn?.setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
+            selectLanguage("en")
+        }
+        btnCancel?.setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
+            dialog.dismiss()
+        }
+        dialog.show()
+    }
+
+    private fun updateAppIconSummary() {
+        if (!::textAppIconSummary.isInitialized) return
+        val current = AppIconManager.getCurrentIcon(this)
+        textAppIconSummary.text = if (current == AppIconManager.ICON_LIGHT) {
+            getString(R.string.settings_icon_light)
+        } else {
+            getString(R.string.settings_icon_dark)
+        }
+    }
+
+    private fun showAppIconBottomSheet() {
+        val dialog = BottomSheetDialog(this)
+        val view = layoutInflater.inflate(R.layout.bottom_sheet_app_icon, null)
+        dialog.setContentView(view)
+
+        val cardDark = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_icon_dark)
+        val cardLight = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_icon_light)
+        val checkDark = view.findViewById<ImageView>(R.id.check_icon_dark)
+        val checkLight = view.findViewById<ImageView>(R.id.check_icon_light)
+        val btnCancel = view.findViewById<View>(R.id.btn_cancel_icon)
+
+        val primaryColor = androidx.core.content.ContextCompat.getColor(this, R.color.m3_primary)
+        val activeStrokeWidth = (2 * resources.displayMetrics.density).toInt()
+
+        val currentIcon = AppIconManager.getCurrentIcon(this)
+        if (currentIcon == AppIconManager.ICON_LIGHT) {
+            cardLight?.strokeColor = primaryColor
+            cardLight?.strokeWidth = activeStrokeWidth
+            checkLight?.visibility = View.VISIBLE
+        } else {
+            cardDark?.strokeColor = primaryColor
+            cardDark?.strokeWidth = activeStrokeWidth
+            checkDark?.visibility = View.VISIBLE
+        }
+
+        fun selectIcon(iconKey: String) {
+            AppIconManager.setAppIcon(this, iconKey)
+            updateAppIconSummary()
+            dialog.dismiss()
+        }
+
+        cardDark?.setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
+            selectIcon(AppIconManager.ICON_DARK)
+        }
+        cardLight?.setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
+            selectIcon(AppIconManager.ICON_LIGHT)
+        }
+        btnCancel?.setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
+            dialog.dismiss()
+        }
+        dialog.show()
     }
 }

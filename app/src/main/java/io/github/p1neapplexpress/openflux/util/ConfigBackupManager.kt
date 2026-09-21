@@ -89,12 +89,19 @@ object ConfigBackupManager {
             val currentTunnels = repo.load().toMutableList()
 
             var importedCount = 0
-            for (newTunnel in backup.tunnels) {
-                val existingIndex = currentTunnels.indexOfFirst { it.name == newTunnel.name }
+            val usedIds = currentTunnels.map { it.id }.toMutableSet()
+            for (rawTunnel in backup.tunnels) {
+                val tunnel = if (usedIds.contains(rawTunnel.id) && currentTunnels.none { it.id == rawTunnel.id && it.name == rawTunnel.name }) {
+                    var newId = System.currentTimeMillis() * 1000L + kotlin.random.Random.nextLong(1000L)
+                    while (usedIds.contains(newId)) { newId++ }
+                    rawTunnel.copy(id = newId)
+                } else rawTunnel
+                usedIds.add(tunnel.id)
+                val existingIndex = currentTunnels.indexOfFirst { it.name == tunnel.name }
                 if (existingIndex >= 0) {
-                    currentTunnels[existingIndex] = newTunnel
+                    currentTunnels[existingIndex] = tunnel
                 } else {
-                    currentTunnels.add(newTunnel)
+                    currentTunnels.add(tunnel)
                 }
                 importedCount++
             }

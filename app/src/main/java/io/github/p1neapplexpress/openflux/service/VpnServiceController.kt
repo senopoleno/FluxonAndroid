@@ -5,7 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 
 import android.net.VpnService
-
+import android.os.Build
 import android.os.ParcelFileDescriptor
 
 import io.github.p1neapplexpress.openflux.event.AppEvent
@@ -50,16 +50,15 @@ class VpnServiceController(private val service: VpnService) {
 
     val fd: Int get() = iface?.fd ?: -1
 
+    val fileDescriptor: java.io.FileDescriptor? get() = iface?.fileDescriptor
+
     fun isConfigured(): Boolean = iface != null
 
     fun configure(intent: Intent): Boolean {
-
         if (iface != null) {
-
-            Logx.w(TAG, "configure() called twice; ignoring")
-
-            return true
-
+            Logx.w(TAG, "configure() called with existing iface; closing previous instance")
+            runCatching { iface?.close() }
+            iface = null
         }
 
         val name = intent.getStringExtra(Constants.INTENT_NAME) ?: "Fluxon"
@@ -87,15 +86,14 @@ class VpnServiceController(private val service: VpnService) {
         val ipType = intent.getIntExtra(Constants.INTENT_IP_TYPE, AppSettings.IP_TYPE_AUTO)
 
         val builder = service.Builder()
-
             .setMtu(mtu)
-
             .setSession(name)
-
             .addDnsServer(dns)
-
             .addDnsServer(secDns)
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            builder.setBlocking(killSwitch)
+        }
 
         when (ipType) {
             AppSettings.IP_TYPE_IPV4 -> {
@@ -103,28 +101,17 @@ class VpnServiceController(private val service: VpnService) {
                 Routes.addRoutes(service, builder, route, bypassLan)
             }
             AppSettings.IP_TYPE_IPV6 -> {
-                // Assign local IPv4 for tun2socks/pdnsd dns gateway, but route all external traffic over IPv6
-                builder.addAddress(VPN_IPV4_ADDR, VPN_IPV4_PREFIX)
                 builder.addAddress(VPN_IPV6_ADDR, VPN_IPV6_PREFIX)
                     .addRoute("::", 0)
             }
-
-            else -> { // Auto / Dual-stack
-
+            else -> { // IP_TYPE_AUTO
                 builder.addAddress(VPN_IPV4_ADDR, VPN_IPV4_PREFIX)
-
                 Routes.addRoutes(service, builder, route, bypassLan)
-
                 if (ipv6) {
-
                     builder.addAddress(VPN_IPV6_ADDR, VPN_IPV6_PREFIX)
-
                         .addRoute("::", 0)
-
                 }
-
             }
-
         }
 
         // Use numeric parsing to avoid InetAddress.getByName() performing a DNS lookup on the calling thread
@@ -136,8 +123,15 @@ class VpnServiceController(private val service: VpnService) {
                     @Suppress("DEPRECATION")
                     java.net.InetAddress.getByName(server.filter { it.isDigit() || it == '.' || it == ':' })
                 }
-                val prefix = if (addr is java.net.Inet6Address) 128 else 32
-                builder.addRoute(addr, prefix)
+                if (addr is java.net.Inet6Address) {
+                    if (ipType != AppSettings.IP_TYPE_IPV4 && (ipType == AppSettings.IP_TYPE_IPV6 || ipv6)) {
+                        builder.addRoute(addr, 128)
+                    }
+                } else {
+                    if (ipType != AppSettings.IP_TYPE_IPV6) {
+                        builder.addRoute(addr, 32)
+                    }
+                }
             }.onFailure { Logx.w(TAG, "Failed to add DNS host route for $server: ${it.message}") }
         }
 

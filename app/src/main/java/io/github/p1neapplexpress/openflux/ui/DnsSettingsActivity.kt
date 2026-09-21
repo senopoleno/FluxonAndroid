@@ -9,6 +9,8 @@ import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.isVisible
 import androidx.core.widget.doAfterTextChanged
 import com.google.android.material.card.MaterialCardView
@@ -18,6 +20,7 @@ import com.google.android.material.textfield.TextInputLayout
 import io.github.p1neapplexpress.openflux.R
 import io.github.p1neapplexpress.openflux.util.AppSettings
 import io.github.p1neapplexpress.openflux.util.ThemePreferences
+import io.github.p1neapplexpress.openflux.util.performAppHaptics
 
 class DnsSettingsActivity : AppCompatActivity() {
 
@@ -41,12 +44,22 @@ class DnsSettingsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         val themePrefs = ThemePreferences(this)
         themePrefs.applyTheme()
+
+        val isNight = when (themePrefs.themeMode) {
+            ThemePreferences.THEME_LIGHT -> false
+            ThemePreferences.THEME_DARK -> true
+            else -> (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        }
+        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+        insetsController.isAppearanceLightStatusBars = !isNight
+        insetsController.isAppearanceLightNavigationBars = !isNight
+
         setContentView(R.layout.activity_dns_settings)
 
         appSettings = AppSettings(this)
 
         findViewById<ImageView>(R.id.btn_back).setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             finish()
         }
 
@@ -76,8 +89,10 @@ class DnsSettingsActivity : AppCompatActivity() {
         switchDoh.isChecked = appSettings.dohEnabled
         switchDoh.jumpDrawablesToCurrentState()
 
-        val sysDns = appSettings.primaryDns
-        val summaryHtml = getString(R.string.dns_use_system_summary, "<font color='#2563EB'>$sysDns</font>")
+        val detectedDns = appSettings.systemPrimaryDns ?: appSettings.primaryDns
+        val primaryColor = ContextCompat.getColor(this, R.color.m3_primary)
+        val hexColor = String.format("#%06X", (0xFFFFFF and primaryColor))
+        val summaryHtml = getString(R.string.dns_use_system_summary, "<font color='$hexColor'>$detectedDns</font>")
         textSystemDnsSummary.text = androidx.core.text.HtmlCompat.fromHtml(summaryHtml, androidx.core.text.HtmlCompat.FROM_HTML_MODE_LEGACY)
 
         when (appSettings.dohProvider) {
@@ -85,6 +100,7 @@ class DnsSettingsActivity : AppCompatActivity() {
             AppSettings.DOH_PROVIDER_GOOGLE -> findViewById<RadioButton>(R.id.radio_doh_google).isChecked = true
             AppSettings.DOH_PROVIDER_ADGUARD -> findViewById<RadioButton>(R.id.radio_doh_adguard).isChecked = true
             AppSettings.DOH_PROVIDER_QUAD9 -> findViewById<RadioButton>(R.id.radio_doh_quad9).isChecked = true
+            AppSettings.DOH_PROVIDER_XBOX -> findViewById<RadioButton>(R.id.radio_doh_xbox).isChecked = true
             AppSettings.DOH_PROVIDER_CUSTOM -> findViewById<RadioButton>(R.id.radio_doh_custom).isChecked = true
             else -> findViewById<RadioButton>(R.id.radio_doh_cloudflare).isChecked = true
         }
@@ -96,6 +112,7 @@ class DnsSettingsActivity : AppCompatActivity() {
             AppSettings.DNS_MODE_GOOGLE -> findViewById<RadioButton>(R.id.radio_dns_google).isChecked = true
             AppSettings.DNS_MODE_ADGUARD -> findViewById<RadioButton>(R.id.radio_dns_adguard).isChecked = true
             AppSettings.DNS_MODE_QUAD9 -> findViewById<RadioButton>(R.id.radio_dns_quad9).isChecked = true
+            AppSettings.DNS_MODE_XBOX -> findViewById<RadioButton>(R.id.radio_dns_xbox).isChecked = true
             AppSettings.DNS_MODE_CUSTOM -> findViewById<RadioButton>(R.id.radio_dns_custom).isChecked = true
             else -> findViewById<RadioButton>(R.id.radio_dns_cloudflare).isChecked = true
         }
@@ -105,22 +122,26 @@ class DnsSettingsActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
+        switchSystemDns.setOnClickListener { switchSystemDns.performAppHaptics() }
         switchSystemDns.setOnCheckedChangeListener { _, isChecked ->
             appSettings.useSystemDns = isChecked
             updateUiState()
         }
 
+        switchDoh.setOnClickListener { switchDoh.performAppHaptics() }
         switchDoh.setOnCheckedChangeListener { _, isChecked ->
             appSettings.dohEnabled = isChecked
             updateUiState()
         }
 
         groupDohProviders.setOnCheckedChangeListener { _, checkedId ->
+            groupDohProviders.performAppHaptics()
             val provider = when (checkedId) {
                 R.id.radio_doh_cloudflare -> AppSettings.DOH_PROVIDER_CLOUDFLARE
                 R.id.radio_doh_google -> AppSettings.DOH_PROVIDER_GOOGLE
                 R.id.radio_doh_adguard -> AppSettings.DOH_PROVIDER_ADGUARD
                 R.id.radio_doh_quad9 -> AppSettings.DOH_PROVIDER_QUAD9
+                R.id.radio_doh_xbox -> AppSettings.DOH_PROVIDER_XBOX
                 R.id.radio_doh_custom -> AppSettings.DOH_PROVIDER_CUSTOM
                 else -> AppSettings.DOH_PROVIDER_CLOUDFLARE
             }
@@ -133,11 +154,13 @@ class DnsSettingsActivity : AppCompatActivity() {
         }
 
         groupDnsServers.setOnCheckedChangeListener { _, checkedId ->
+            groupDnsServers.performAppHaptics()
             val mode = when (checkedId) {
                 R.id.radio_dns_cloudflare -> AppSettings.DNS_MODE_CLOUDFLARE
                 R.id.radio_dns_google -> AppSettings.DNS_MODE_GOOGLE
                 R.id.radio_dns_adguard -> AppSettings.DNS_MODE_ADGUARD
                 R.id.radio_dns_quad9 -> AppSettings.DNS_MODE_QUAD9
+                R.id.radio_dns_xbox -> AppSettings.DNS_MODE_XBOX
                 R.id.radio_dns_custom -> AppSettings.DNS_MODE_CUSTOM
                 else -> AppSettings.DNS_MODE_CLOUDFLARE
             }

@@ -9,6 +9,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
@@ -33,22 +34,68 @@
         android:extractNativeLibs="true"
         tools:targetApi="34">
 
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="barcode" />
+
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
-            android:launchMode="singleTask">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="openflux" />
                 <data android:scheme="fluxon" />
+                <data android:scheme="paperflux" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+
+        <!-- Dynamic Launcher App Icon Aliases -->
+        <activity-alias
+            android:name=".ui.MainActivityDark"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_dark"
+            android:roundIcon="@mipmap/ic_launcher_round_dark"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".ui.MainActivityLight"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_light"
+            android:roundIcon="@mipmap/ic_launcher_round_light"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".ui.MainActivityDefault"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_dark"
+            android:roundIcon="@mipmap/ic_launcher_round_dark"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -63,22 +110,38 @@
         <activity
             android:name=".ui.SplitTunnelActivity"
             android:exported="false"
-            android:label="@string/split_tunneling_title" />
+            android:label="@string/split_tunneling_title"
+            android:screenOrientation="portrait" />
 
         <activity
             android:name=".ui.SettingsActivity"
             android:exported="false"
-            android:label="@string/settings_title" />
+            android:label="@string/settings_title"
+            android:screenOrientation="portrait" />
 
         <activity
             android:name=".ui.DnsSettingsActivity"
             android:exported="false"
-            android:label="@string/dns_menu_title" />
+            android:label="@string/dns_menu_title"
+            android:screenOrientation="portrait" />
+
+        <activity
+            android:name=".ui.AppearanceActivity"
+            android:exported="false"
+            android:label="@string/settings_appearance_elements_title"
+            android:screenOrientation="portrait" />
 
         <activity
             android:name=".ui.DomainRulesActivity"
             android:exported="false"
-            android:label="@string/domain_rules_title" />
+            android:label="@string/domain_rules_title"
+            android:screenOrientation="portrait" />
+
+        <activity
+            android:name=".ui.LogsActivity"
+            android:exported="false"
+            android:label="@string/settings_event_logs_title"
+            android:screenOrientation="portrait" />
 
         <service
             android:name=".service.FluxonTileService"
@@ -113,5 +176,12 @@
                 android:value="vpn_tunnel" />
         </service>
 
+        <!-- SOCKS5-only proxy service (no VpnService, no TUN, no key icon) -->
+        <service
+            android:name=".service.FluxonProxyService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
     </application>
 </manifest>
+

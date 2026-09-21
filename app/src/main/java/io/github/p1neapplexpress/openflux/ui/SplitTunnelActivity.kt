@@ -74,6 +74,8 @@ import io.github.p1neapplexpress.openflux.util.RussianAppsPreset
 
 import io.github.p1neapplexpress.openflux.util.SplitTunnelPreferences
 
+import io.github.p1neapplexpress.openflux.util.performAppHaptics
+
 import io.github.p1neapplexpress.openflux.util.ThemePreferences
 
 import kotlinx.coroutines.Dispatchers
@@ -335,153 +337,100 @@ class SplitTunnelActivity : AppCompatActivity() {
     private fun setupListeners() {
 
         btnBack.setOnClickListener {
-
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             if (searchBarContainer.isVisible) {
-
                 closeSearch()
-
             } else {
-
                 finish()
-
             }
-
         }
 
         // Section Switcher: Apps vs Sites
-
         sectionToggleGroup.check(R.id.btn_section_apps)
-
         sectionToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
-
             if (isChecked) {
-
+                sectionToggleGroup.performAppHaptics()
                 activeSection = if (checkedId == R.id.btn_section_apps) SECTION_APPS else SECTION_SITES
-
                 containerAppsSection.isVisible = (activeSection == SECTION_APPS)
-
                 containerSitesSection.isVisible = (activeSection == SECTION_SITES)
-
                 applySearchFilter(searchInput.text?.toString().orEmpty())
-
             }
-
         }
 
         // Apps Mode Toggle (Bypass vs Proxy)
-
         val isAppBypass = appPrefs.mode == SplitTunnelPreferences.MODE_BYPASS
-
         appToggleGroup.check(if (isAppBypass) R.id.btn_tab_bypass else R.id.btn_tab_proxy)
-
         updateAppModeDescription(isAppBypass)
 
         appToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
-
             if (isChecked) {
-
+                appToggleGroup.performAppHaptics()
                 val bypass = checkedId == R.id.btn_tab_bypass
-
                 appPrefs.mode = if (bypass) SplitTunnelPreferences.MODE_BYPASS else SplitTunnelPreferences.MODE_PROXY
-
                 updateAppModeDescription(bypass)
-
                 syncAppSelectionsWithPrefs()
-
             }
-
         }
 
         // Hide System Apps Switch
-
         switchHideSystem.isChecked = appPrefs.hideSystemApps
         switchHideSystem.jumpDrawablesToCurrentState()
-
+        switchHideSystem.setOnClickListener {
+            switchHideSystem.performAppHaptics()
+        }
         switchHideSystem.setOnCheckedChangeListener { _, isChecked ->
-
             appPrefs.hideSystemApps = isChecked
-
             applySearchFilter(searchInput.text?.toString().orEmpty())
-
         }
 
         btnAppSelectAll.setOnClickListener {
-
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             toggleSelectAllApps()
-
         }
 
         btnAppResetDefaults.setOnClickListener {
-
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             resetAppDefaults()
-
         }
 
         // Sites Mode Toggle (Bypass vs Proxy)
-
         val isSiteBypass = domainPrefs.mode == DomainRulesPreferences.MODE_BYPASS
-
         sitesToggleGroup.check(if (isSiteBypass) R.id.btn_sites_tab_bypass else R.id.btn_sites_tab_proxy)
-
         updateSitesModeDescription(isSiteBypass)
 
         sitesToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
-
             if (isChecked) {
-
+                sitesToggleGroup.performAppHaptics()
                 val bypass = checkedId == R.id.btn_sites_tab_bypass
-
                 domainPrefs.mode = if (bypass) DomainRulesPreferences.MODE_BYPASS else DomainRulesPreferences.MODE_PROXY
-
+                domainPrefs.writeRulesFile(this@SplitTunnelActivity)
                 updateSitesModeDescription(bypass)
-
             }
-
         }
 
         btnAddSite.setOnClickListener {
-
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             showAddSiteBottomSheet()
-
         }
 
         btnSitePresets.setOnClickListener {
-
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             showPresetsBottomSheet()
-
         }
 
         btnClearSites.setOnClickListener {
-
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             confirmClearSites()
-
         }
 
         // Search Bar listeners
-
         btnSearchToggle.setOnClickListener {
-
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             openSearch()
-
         }
 
         btnClearSearch.setOnClickListener {
-
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
 
             if (searchInput.text.isNullOrEmpty()) {
 
@@ -816,61 +765,43 @@ class SplitTunnelActivity : AppCompatActivity() {
     }
 
     private fun deleteDomain(domain: String) {
-
         domainPrefs.removeDomain(domain)
-
+        domainPrefs.writeRulesFile(this)
         loadDomains()
-
         Toast.makeText(this, R.string.domain_deleted, Toast.LENGTH_SHORT).show()
-
     }
 
     private fun showAddSiteBottomSheet() {
-
         val dialog = BottomSheetDialog(this)
-
         val view = layoutInflater.inflate(R.layout.bottom_sheet_add_site, null)
-
         dialog.setContentView(view)
 
         val inputLayout = view.findViewById<TextInputLayout>(R.id.layout_domain_input)
-
         val inputEdit = view.findViewById<TextInputEditText>(R.id.input_domain_value)
-
         val btnCancel = view.findViewById<View>(R.id.btn_cancel_add_site)
-
         val btnConfirm = view.findViewById<View>(R.id.btn_confirm_add_site)
 
         btnCancel.setOnClickListener {
-
             dialog.dismiss()
-
         }
 
         fun doAdd() {
-
             val raw = inputEdit.text?.toString().orEmpty().trim()
-
             val clean = raw.lowercase().removePrefix("https://").removePrefix("http://").trimEnd('/')
-
             if (clean.isBlank() || clean.contains(" ") || !clean.contains(".")) {
-
                 inputLayout.error = getString(R.string.split_sites_invalid_domain)
-
                 return
-
             }
-
             inputLayout.error = null
 
             val added = domainPrefs.addDomain(clean)
-
+            if (added) {
+                domainPrefs.writeRulesFile(this@SplitTunnelActivity)
+            }
             dialog.dismiss()
 
             if (added) {
-
                 loadDomains()
-
                 Toast.makeText(this, R.string.domain_added, Toast.LENGTH_SHORT).show()
 
             }
@@ -878,159 +809,99 @@ class SplitTunnelActivity : AppCompatActivity() {
         }
 
         btnConfirm.setOnClickListener {
-
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             doAdd()
-
         }
 
         inputEdit.setOnEditorActionListener { _, actionId, _ ->
-
             if (actionId == EditorInfo.IME_ACTION_DONE) {
-
                 doAdd()
-
                 true
-
             } else {
-
                 false
-
             }
-
         }
 
         dialog.show()
-
         inputEdit.requestFocus()
-
     }
 
     private fun showPresetsBottomSheet() {
-
         val dialog = BottomSheetDialog(this)
-
         val view = layoutInflater.inflate(R.layout.bottom_sheet_domain_presets, null)
-
         dialog.setContentView(view)
 
         fun applyPreset(preset: Set<String>, title: String) {
-
             dialog.dismiss()
-
             domainPrefs.addPreset(preset)
-
+            domainPrefs.writeRulesFile(this@SplitTunnelActivity)
             loadDomains()
-
             Toast.makeText(
-
                 this@SplitTunnelActivity,
-
                 getString(R.string.split_sites_preset_applied, title),
-
                 Toast.LENGTH_SHORT
-
             ).show()
-
         }
 
         // 1. Russian Services
-
         view.findViewById<View>(R.id.card_preset_ru).setOnClickListener {
-
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             applyPreset(DomainRulesPreferences.getPresetRu(this), getString(R.string.split_sites_preset_ru_title))
-
         }
 
         // 2. Blocked Resources
-
         view.findViewById<View>(R.id.card_preset_blocked).setOnClickListener {
-
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             applyPreset(DomainRulesPreferences.getPresetBlocked(this), getString(R.string.split_sites_preset_blocked_title))
-
         }
 
         // 3. YouTube
-
         view.findViewById<View>(R.id.card_preset_youtube).setOnClickListener {
-
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             applyPreset(DomainRulesPreferences.getPresetYoutube(this), getString(R.string.split_sites_preset_youtube_title))
-
         }
 
         // 4. Discord
-
         view.findViewById<View>(R.id.card_preset_discord).setOnClickListener {
-
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             applyPreset(DomainRulesPreferences.getPresetDiscord(this), getString(R.string.split_sites_preset_discord_title))
-
         }
 
         // 5. AI
-
         view.findViewById<View>(R.id.card_preset_ai).setOnClickListener {
-
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             applyPreset(DomainRulesPreferences.getPresetAi(this), getString(R.string.split_sites_preset_ai_title))
-
         }
 
         // 6. All Blocked Combo
-
         view.findViewById<View>(R.id.card_preset_all_blocked).setOnClickListener {
-
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             applyPreset(DomainRulesPreferences.getPresetAllBlocked(this), getString(R.string.split_sites_preset_all_blocked_title))
-
         }
 
         view.findViewById<View>(R.id.btn_cancel_preset).setOnClickListener {
-
             dialog.dismiss()
-
         }
 
         dialog.show()
-
     }
 
     private fun confirmClearSites() {
-
         val dialog = BottomSheetDialog(this)
-
         val view = layoutInflater.inflate(R.layout.bottom_sheet_confirm_clear, null)
-
         dialog.setContentView(view)
 
         view.findViewById<View>(R.id.btn_cancel_clear).setOnClickListener {
-
             dialog.dismiss()
-
         }
 
         view.findViewById<View>(R.id.btn_confirm_clear).setOnClickListener {
-
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             dialog.dismiss()
-
             domainPrefs.clearAll()
-
+            domainPrefs.writeRulesFile(this)
             loadDomains()
-
             Toast.makeText(this, R.string.split_sites_clear, Toast.LENGTH_SHORT).show()
-
         }
 
         dialog.show()
@@ -1189,12 +1060,12 @@ class SplitTunnelActivity : AppCompatActivity() {
             }
 
             holder.itemView.setOnClickListener {
-                it.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                it.performAppHaptics(HapticFeedbackConstants.CLOCK_TICK)
                 toggleAction()
             }
 
             holder.checkbox.setOnClickListener {
-                it.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                it.performAppHaptics(HapticFeedbackConstants.CLOCK_TICK)
                 val pos = holder.bindingAdapterPosition
                 if (pos != RecyclerView.NO_POSITION && pos in currentList.indices) {
                     val currentItem = currentList[pos]
@@ -1256,7 +1127,7 @@ class SplitTunnelActivity : AppCompatActivity() {
 
             holder.btnDelete.setOnClickListener {
 
-                it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
 
                 onDelete(domain)
 

@@ -28,7 +28,7 @@
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:src="@drawable/ic_restore"
-            app:tint="@color/accent_blue"
+            app:tint="@color/m3_primary"
             android:background="@drawable/bg_icon_badge"
             android:padding="8dp"
             android:contentDescription="@null" />
@@ -65,10 +65,10 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"
-        app:cardBackgroundColor="@color/bg_card"
-        app:cardCornerRadius="14dp"
+        app:cardBackgroundColor="@color/m3_surface_container"
+        app:cardCornerRadius="16dp"
         app:cardElevation="0dp"
-        app:strokeColor="@color/bg_card_stroke"
+        app:strokeColor="@color/m3_outline_variant"
         app:strokeWidth="1dp">
 
         <LinearLayout
@@ -116,7 +116,7 @@
         android:gravity="end">
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_import_cancel"
+            android:id="@+id/btn_cancel_import"
             style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -124,12 +124,12 @@
             android:text="@string/cancel" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_import_confirm"
+            android:id="@+id/btn_confirm_import"
             style="@style/Widget.Material3.Button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/import_sheet_action"
-            app:cornerRadius="10dp" />
+            app:cornerRadius="12dp" />
 
     </LinearLayout>
 

@@ -27,10 +27,13 @@ object VpnIntentFactory {
                 putExtra(Constants.INTENT_REMOTE_SERVER, it)
                 putExtra(Constants.INTENT_REMOTE_PORT, cfg.remotePort)
             }
-            cfg.udpGw?.let { putExtra(Constants.INTENT_UDP_GW, it) }
-            cfg.username?.let { putExtra(Constants.INTENT_USERNAME, it) }
-            cfg.password?.let { putExtra(Constants.INTENT_PASSWORD, it) }
+            val user = if (cfg.username.isNullOrEmpty() || cfg.password.isNullOrEmpty()) null else cfg.username
+            val pass = if (cfg.username.isNullOrEmpty() || cfg.password.isNullOrEmpty()) null else cfg.password
+            user?.let { putExtra(Constants.INTENT_USERNAME, it) }
+            pass?.let { putExtra(Constants.INTENT_PASSWORD, it) }
             cfg.transportType?.let { putExtra(Constants.INTENT_TRANSPORT_TYPE, it) }
-            cfg.transportPayload?.let { putExtra(Constants.INTENT_TRANSPORT_PAYLOAD, it as Array<String>) }
+            cfg.transportPayload?.let { putExtra(Constants.INTENT_TRANSPORT_PAYLOAD, it) }
+            putExtra(Constants.INTENT_DOH_ENABLED, cfg.dohEnabled)
+            cfg.dohUrl?.let { putExtra(Constants.INTENT_DOH_URL, it) }
         }
 }

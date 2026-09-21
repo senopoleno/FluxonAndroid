@@ -33,7 +33,7 @@
                 android:layout_height="24dp"
                 android:layout_gravity="center"
                 android:src="@drawable/ic_split_tunnel"
-                app:tint="@color/accent_blue"
+                app:tint="@color/m3_primary"
                 android:contentDescription="@null" />
 
         </FrameLayout>
@@ -63,10 +63,10 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"
-        app:cardBackgroundColor="@color/bg_card"
-        app:cardCornerRadius="12dp"
+        app:cardBackgroundColor="@color/m3_surface_container"
+        app:cardCornerRadius="16dp"
         app:cardElevation="0dp"
-        app:strokeColor="@color/bg_card_stroke"
+        app:strokeColor="@color/m3_outline_variant"
         app:strokeWidth="1dp">
 
         <LinearLayout
@@ -96,7 +96,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:layout_marginVertical="10dp"
-                android:background="@color/bg_card_stroke" />
+                android:background="@color/m3_outline_variant" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -140,7 +140,7 @@
             android:layout_height="wrap_content"
             android:text="@string/hotspot_sheet_copy"
             app:icon="@drawable/ic_content_copy"
-            app:cornerRadius="10dp" />
+            app:cornerRadius="12dp" />
 
     </LinearLayout>
 

@@ -79,8 +79,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/split_sites_clear_sheet_btn"
-            android:backgroundTint="@color/state_error"
-            app:cornerRadius="10dp" />
+            android:backgroundTint="@color/m3_error"
+            app:cornerRadius="12dp" />
 
     </LinearLayout>
 

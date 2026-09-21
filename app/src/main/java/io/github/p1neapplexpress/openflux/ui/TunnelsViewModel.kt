@@ -8,9 +8,11 @@ import android.content.ServiceConnection
 import android.content.SharedPreferences
 import android.os.Build
 import android.os.IBinder
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.p1neapplexpress.openflux.IUnifiedService
+import io.github.p1neapplexpress.openflux.util.Constants
 import io.github.p1neapplexpress.openflux.data.Tunnel
 import io.github.p1neapplexpress.openflux.data.TunnelHealth
 import io.github.p1neapplexpress.openflux.data.TunnelRepository
@@ -49,6 +51,7 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
 
     @Volatile private var service: IUnifiedService? = null
     @Volatile private var bound = false
+    @Volatile private var isSwitchingTunnel = false
     private var activeTunnelData: Tunnel? = null
 
     private val connection = object : ServiceConnection {
@@ -56,6 +59,7 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
             service = IUnifiedService.Stub.asInterface(binder)
             bound = true
             Logx.d(TAG, "service connected")
+            syncRunningServiceState()
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -139,6 +143,7 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
 
     private var uptimeJob: Job? = null
     private var healthCheckJob: Job? = null
+    private var connectionJob: Job? = null
 
     init {
         repo.load().forEach { t ->
@@ -149,6 +154,7 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         }
         _healthMap.value = healthCache.toMap()
         refresh()
+        syncRunningServiceState()
         viewModelScope.launch {
             EventBus.events.collect { event ->
                 when (event) {
@@ -156,29 +162,75 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
                         _rxSpeed.value = event.rxSpeed
                         _txSpeed.value = event.txSpeed
                     }
+                    is AppEvent.VpnConnected -> {
+                        val tName = event.tunnelName ?: io.github.p1neapplexpress.openflux.service.SocksVpnService.activeTunnelName
+                        val tunnel = (if (!tName.isNullOrEmpty()) {
+                            repo.load().firstOrNull { it.name == tName }
+                        } else null) ?: _selected.value ?: repo.getSelected()
+                        if (tunnel != null) {
+                            _active.value = TunnelState.Running(tunnel)
+                            _tunnelHealth.value = TunnelHealth.AVAILABLE
+                            startUptimeCounter()
+                            startHealthCheckLoop(tunnel)
+                            refresh()
+                        }
+                    }
                     is AppEvent.TransportDisconnected -> {
                         if (_active.value.isActive) {
                             Logx.e(TAG, "Transport disconnected event received")
                             val cur = _active.value.tunnel
-                            _active.value = TunnelState.Error("Transport disconnected")
-                            _tunnelHealth.value = TunnelHealth.UNAVAILABLE
-                            if (cur != null) {
-                                saveHealth(cur.id, TunnelHealth.UNAVAILABLE)
-                                pingCache.remove(cur.id)
-                                _pingMap.value = pingCache.toMap()
+                            val rotated = if (cur != null) rotateYandexLanes(cur) else null
+                            if (rotated != null) {
+                                Logx.i(TAG, "Автоматическая ротация каналов Yandex Docs...")
+                                EventBus.dispatch(AppEvent.LogMessage("[I] [TRANSPORT] Выполняется автоматическая ротация каналов Yandex Docs..."))
+                                _active.value = TunnelState.Reconnecting(rotated)
+                                viewModelScope.launch {
+                                    isSwitchingTunnel = true
+                                    stopInternal(preserveActiveState = true)
+                                    delay(400)
+                                    startTunnelInternal(rotated)
+                                }
+                            } else {
+                                val errorInfo = io.github.p1neapplexpress.openflux.util.TunnelErrorClassifier.classify("Transport disconnected")
+                                _active.value = TunnelState.Error(errorInfo.title, errorInfo.message)
+                                _tunnelHealth.value = TunnelHealth.UNAVAILABLE
+                                if (cur != null) {
+                                    saveHealth(cur.id, TunnelHealth.UNAVAILABLE)
+                                    pingCache.remove(cur.id)
+                                    _pingMap.value = pingCache.toMap()
+                                }
+                                stopUptimeCounter()
+                                refresh()
+                                if (cur != null) {
+                                    triggerFailoverIfNeeded(cur)
+                                }
                             }
-                            stopUptimeCounter()
-                            refresh()
                         }
+                    }
+                    is AppEvent.Reconnecting -> {
+                        val cur = _active.value.tunnel ?: _selected.value
+                        if (cur != null) {
+                            _active.value = TunnelState.Reconnecting(cur)
+                        }
+                    }
+                    is AppEvent.WaitingForNetwork -> {
+                        val cur = _active.value.tunnel ?: _selected.value
+                        _active.value = TunnelState.WaitingForNetwork(cur)
                     }
                     is AppEvent.VpnDisconnected -> {
                         if (_active.value.isActive) {
+                            if (isSwitchingTunnel) {
+                                Logx.d(TAG, "Ignoring VpnDisconnected from tunnel switch")
+                                isSwitchingTunnel = false
+                                return@collect
+                            }
                             Logx.i(TAG, "VpnDisconnected event received")
                             val ctx = getApplication<Application>()
                             try { ctx.unbindService(connection) } catch (_: Exception) {}
                             bound = false
                             service = null
                             activeTunnelData = null
+                            io.github.p1neapplexpress.openflux.service.SocksVpnService.connectedAtRealtime = 0L
                             _active.value = TunnelState.Idle
                             _rxSpeed.value = 0L
                             _txSpeed.value = 0L
@@ -209,27 +261,37 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         val running = _active.value
         if (running is TunnelState.Running && running.tunnel.id == tunnel.id) return
 
-        viewModelScope.launch {
+        connectionJob?.cancel()
+        connectionJob = viewModelScope.launch {
             if (_active.value.isActive) {
                 _active.value = TunnelState.Connecting(tunnel)
                 _tunnelHealth.value = TunnelHealth.CHECKING
+                isSwitchingTunnel = true
                 stopInternal(preserveActiveState = true)
-                delay(120)
+                delay(200)
             }
             startTunnelInternal(tunnel)
         }
     }
 
     private fun startTunnelInternal(tunnel: Tunnel) {
+        Logx.i(TAG, "Starting tunnel: '${tunnel.name}' (transport: ${tunnel.transportType})")
+        io.github.p1neapplexpress.openflux.service.SocksVpnService.connectedAtRealtime = 0L
+        _uptimeSeconds.value = 0L
         _active.value = TunnelState.Connecting(tunnel)
         _tunnelHealth.value = TunnelHealth.CHECKING
 
         val ctx = getApplication<Application>()
         val prepared = TunnelLinkParser.ensureLocalKeyFile(ctx, tunnel)
         val splitPrefs = io.github.p1neapplexpress.openflux.util.SplitTunnelPreferences(ctx)
+        val isSplitEnabled = splitPrefs.isEnabled
         val appBypass = splitPrefs.mode == io.github.p1neapplexpress.openflux.util.SplitTunnelPreferences.MODE_BYPASS
-        val selectedApps = if (appBypass) splitPrefs.bypassApps else splitPrefs.proxyApps
-        val perApp = selectedApps.isNotEmpty()
+        val selectedApps = if (isSplitEnabled) {
+            if (appBypass) splitPrefs.bypassApps else splitPrefs.proxyApps
+        } else {
+            emptySet()
+        }
+        val perApp = isSplitEnabled && selectedApps.isNotEmpty()
         val appList = selectedApps.toTypedArray()
 
         val appSettings = io.github.p1neapplexpress.openflux.util.AppSettings(ctx)
@@ -237,8 +299,7 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
             authEnabled = appSettings.socks5AuthEnabled,
             customUser = appSettings.socks5CustomUser,
             customPass = appSettings.socks5CustomPass,
-            shareLan = appSettings.shareLanProxy,
-            customPort = if (appSettings.shareLanProxy) appSettings.lanProxyPort else null
+            shareLan = appSettings.shareLanProxy
         )
 
         val modifiedPayload = prepared.transportConnPayload.toMutableList()
@@ -257,9 +318,31 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         removeFlag("--socks5-user")
         removeFlag("-socks5-pass")
         removeFlag("--socks5-pass")
+        removeFlag("--domain-rules-file")
+        removeFlag("-domain-rules-file")
+        removeFlag("--doh-url")
+        removeFlag("-doh-url")
+        removeFlag("--doh")
+        removeFlag("-doh")
 
         modifiedPayload.add("--socks5")
         modifiedPayload.add("127.0.0.1:${session.port}")
+
+        val effectiveDoh = !appSettings.useSystemDns && appSettings.dohEnabled
+        if (effectiveDoh && appSettings.dohUrl.isNotBlank()) {
+            modifiedPayload.add("--doh-url")
+            modifiedPayload.add(appSettings.dohUrl)
+            modifiedPayload.add("--doh")
+        }
+
+        val domainPrefs = io.github.p1neapplexpress.openflux.util.DomainRulesPreferences(ctx)
+        if (domainPrefs.hasActiveRules()) {
+            val rulesFile = domainPrefs.writeRulesFile(ctx)
+            modifiedPayload.add("--domain-rules-file")
+            modifiedPayload.add(rulesFile.absolutePath)
+            modifiedPayload.add("--domain-mode")
+            modifiedPayload.add(domainPrefs.getModeString())
+        }
 
         val (remoteHost, remotePort) = io.github.p1neapplexpress.openflux.vpn.TunnelEndpointHelper.extractTarget(prepared)
         val cfg = VPNConfig(
@@ -281,124 +364,46 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
             remotePort = remotePort,
             transportType = prepared.transportType,
             transportPayload = modifiedPayload.toTypedArray(),
+            dohEnabled = effectiveDoh,
+            dohUrl = if (effectiveDoh) appSettings.dohUrl else null,
         )
-        val intent = VpnIntentFactory.build(ctx, cfg)
+        val intent = VpnIntentFactory.build(ctx, cfg).apply {
+            putExtra(Constants.INTENT_AUTONOMOUS, true)
+        }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            ctx.startForegroundService(intent)
+        if (appSettings.proxyOnlyMode) {
+            // ── Proxy-only mode: start FluxonProxyService (no VPN key icon) ──
+            Logx.i(TAG, "Proxy-only mode: starting FluxonProxyService")
+            EventBus.dispatch(AppEvent.LogMessage("[I] Режим прокси (без VPN-иконки): запуск FluxonProxyService"))
+            val proxyIntent = Intent(ctx, io.github.p1neapplexpress.openflux.service.FluxonProxyService::class.java).apply {
+                putExtra(Constants.INTENT_NAME, prepared.name)
+                putExtra(Constants.INTENT_TRANSPORT_TYPE, prepared.transportType)
+                putExtra(Constants.INTENT_TRANSPORT_PAYLOAD, modifiedPayload.toTypedArray())
+            }
+            ContextCompat.startForegroundService(ctx, proxyIntent)
+            // FluxonProxyService has no IUnifiedService binder — health check via isProxyRunning
         } else {
-            ctx.startService(intent)
+            // ── Normal VPN mode: start SocksVpnService ────────────────────────
+            ContextCompat.startForegroundService(ctx, intent)
+            ctx.bindService(
+                Intent(ctx, SocksVpnService::class.java),
+                connection,
+                Context.BIND_AUTO_CREATE,
+            )
         }
 
-        ctx.bindService(
-            Intent(ctx, SocksVpnService::class.java),
-            connection,
-            Context.BIND_AUTO_CREATE,
-        )
-
-        activeTunnelData = prepared.copy(transportConnPayload = modifiedPayload)
-        val isDebug = modifiedPayload.contains("--debug")
+        val activeLevel = if (io.github.p1neapplexpress.openflux.service.NativeProcessSupervisor.activeLogLevel.isNotBlank()) {
+            io.github.p1neapplexpress.openflux.service.NativeProcessSupervisor.activeLogLevel
+        } else {
+            appSettings.connectionLogLevel
+        }
+        val isDebug = activeLevel == "DEBUG" || modifiedPayload.contains("--debug") || appSettings.verboseLog
         Logx.setVerbose(isDebug)
-        Logx.i(TAG, "logging initialized: verbose=$isDebug (level: ${if (isDebug) "DEBUG" else "INFO"})")
+        Logx.i(TAG, "logging initialized: verbose=$isDebug (level: $activeLevel)")
 
-        viewModelScope.launch(Dispatchers.IO) {
-            var attempts = 0
-            while (!bound && attempts < 100) {
-                delay(50)
-                attempts++
-            }
-            if (!bound || service == null) {
-                Logx.e(TAG, "failed to bind to service")
-                _active.value = TunnelState.Error("Service not connected")
-                _tunnelHealth.value = TunnelHealth.UNAVAILABLE
-                return@launch
-            }
-            Logx.i(TAG, "service bound, starting transport")
-
-            _active.value = TunnelState.StartingTransport(prepared)
-            if (service?.isFServiceRunning() != true) {
-                try {
-                    service?.startOpenFluxNative(
-                        prepared.transportType,
-                        modifiedPayload.toTypedArray()
-                    )
-                } catch (e: Exception) {
-                    Logx.e(TAG, "startOpenFluxNative failed", e)
-                    _active.value = TunnelState.Error("Transport failed: ${e.message}")
-                    _tunnelHealth.value = TunnelHealth.UNAVAILABLE
-                    triggerFailoverIfNeeded(tunnel)
-                    return@launch
-                }
-            }
-
-            var transportReady = false
-            for (i in 1..40) {
-                delay(250)
-                try {
-                    if (service?.isFServiceRunning() == true) {
-                        transportReady = true
-                        Logx.i(TAG, "transport started after ${i * 250}ms")
-                        break
-                    }
-                } catch (e: Exception) {
-                    Logx.e(TAG, "isFServiceRunning threw", e)
-                }
-            }
-            if (!transportReady) {
-                Logx.e(TAG, "transport did not start")
-                _active.value = TunnelState.Error("Transport did not start")
-                _tunnelHealth.value = TunnelHealth.UNAVAILABLE
-                triggerFailoverIfNeeded(tunnel)
-                return@launch
-            }
-
-            Logx.i(TAG, "starting tun2socks")
-            _active.value = TunnelState.StartingTun2Socks(tunnel)
-            if (service?.isVpnRunning() != true) {
-                try {
-                    service?.startTun2Socks()
-                } catch (e: Exception) {
-                    Logx.e(TAG, "startTun2Socks failed", e)
-                    _active.value = TunnelState.Error("tun2socks failed: ${e.message}")
-                    _tunnelHealth.value = TunnelHealth.UNAVAILABLE
-                    triggerFailoverIfNeeded(tunnel)
-                    return@launch
-                }
-            }
-
-            var vpnReady = false
-            for (i in 1..40) {
-                delay(250)
-                try {
-                    if (service?.isVpnRunning() == true) {
-                        vpnReady = true
-                        Logx.i(TAG, "tun2socks started after ${i * 250}ms")
-                        break
-                    }
-                } catch (e: Exception) {
-                    Logx.e(TAG, "isVpnRunning threw", e)
-                }
-            }
-            if (!vpnReady) {
-                Logx.e(TAG, "tun2socks did not start")
-                _active.value = TunnelState.Error("tun2socks did not start")
-                _tunnelHealth.value = TunnelHealth.UNAVAILABLE
-                triggerFailoverIfNeeded(tunnel)
-                return@launch
-            } else {
-                _active.value = TunnelState.Running(tunnel)
-                _tunnelHealth.value = TunnelHealth.CHECKING
-                healthCache[tunnel.id] = TunnelHealth.CHECKING
-                _healthMap.value = healthCache.toMap()
-                startUptimeCounter()
-                viewModelScope.launch(Dispatchers.IO) {
-                    kotlinx.coroutines.delay(1500L)
-                    probeRunningTunnel(tunnel)
-                }
-            }
-            refresh()
-        }
+        refresh()
     }
+
 
     suspend fun stopInternal(preserveActiveState: Boolean = false) {
         Logx.i(TAG, "stopInternal(preserveActiveState=$preserveActiveState)")
@@ -423,11 +428,23 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
                     }
                     ctx.startService(disconnectIntent)
                 } catch (e: Exception) {
-                    Logx.w(TAG, "Failed sending disconnect intent: ${e.message}")
+                    Logx.w(TAG, "Failed sending VPN disconnect intent: ${e.message}")
+                }
+                // Also stop proxy service if it's running
+                if (io.github.p1neapplexpress.openflux.service.FluxonProxyService.isProxyRunning) {
+                    try {
+                        val proxyDisconnect = Intent(ctx, io.github.p1neapplexpress.openflux.service.FluxonProxyService::class.java).apply {
+                            action = io.github.p1neapplexpress.openflux.service.FluxonProxyService.ACTION_DISCONNECT
+                        }
+                        ctx.startService(proxyDisconnect)
+                    } catch (e: Exception) {
+                        Logx.w(TAG, "Failed sending proxy disconnect intent: ${e.message}")
+                    }
                 }
             }
         }
         if (!preserveActiveState) {
+            io.github.p1neapplexpress.openflux.service.SocksVpnService.connectedAtRealtime = 0L
             _active.value = TunnelState.Idle
             _rxSpeed.value = 0L
             _txSpeed.value = 0L
@@ -444,6 +461,8 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun stop() {
         Logx.i(TAG, "stop()")
+        connectionJob?.cancel()
+        connectionJob = null
         viewModelScope.launch {
             stopInternal(preserveActiveState = false)
         }
@@ -526,7 +545,10 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private suspend fun probeRunningTunnel(tunnel: Tunnel): Boolean = withContext(Dispatchers.IO) {
-        if (service?.isFServiceRunning() != true || service?.isVpnRunning() != true) {
+        val svcRunning = runCatching {
+            service?.isFServiceRunning() == true && service?.isVpnRunning() == true
+        }.getOrDefault(false)
+        if (!svcRunning) {
             return@withContext false
         }
         for (attempt in 1..2) {
@@ -538,7 +560,11 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun checkRunningHealthInternal(tunnel: Tunnel): Boolean {
-        if (service?.isFServiceRunning() != true || service?.isVpnRunning() != true) {
+        val svcRunning = runCatching {
+            service?.isFServiceRunning() == true && service?.isVpnRunning() == true
+        }.getOrDefault(false)
+
+        if (!svcRunning) {
             saveHealth(tunnel.id, TunnelHealth.UNAVAILABLE)
             _tunnelHealth.value = TunnelHealth.UNAVAILABLE
             pingCache.remove(tunnel.id)
@@ -569,7 +595,6 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
             _tunnelHealth.value = TunnelHealth.UNAVAILABLE
             pingCache.remove(tunnel.id)
             _pingMap.value = pingCache.toMap()
-            triggerFailoverIfNeeded(tunnel)
             return false
         }
 
@@ -581,7 +606,6 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
             _tunnelHealth.value = TunnelHealth.UNAVAILABLE
             pingCache.remove(tunnel.id)
             _pingMap.value = pingCache.toMap()
-            triggerFailoverIfNeeded(tunnel)
             return false
         }
 
@@ -605,7 +629,7 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
                 conn.connectTimeout = 2500
                 conn.readTimeout = 2500
                 conn.instanceFollowRedirects = false
-                conn.setRequestProperty("User-Agent", "Fluxon/1.1.0")
+                conn.setRequestProperty("User-Agent", "Fluxon/1.2.0")
                 conn.setRequestProperty("Connection", "close")
                 val t0 = android.os.SystemClock.elapsedRealtime()
                 try {
@@ -635,7 +659,8 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         Logx.i(TAG, "Failover triggered: switching from '${failedTunnel.name}' to '${nextTunnel.name}'")
         EventBus.dispatch(io.github.p1neapplexpress.openflux.event.AppEvent.LogMessage("[I] Failover: переключение на '${nextTunnel.name}'..."))
 
-        viewModelScope.launch(Dispatchers.Main) {
+        connectionJob?.cancel()
+        connectionJob = viewModelScope.launch(Dispatchers.Main) {
             stop()
             kotlinx.coroutines.delay(1000L)
             selectTunnel(nextTunnel)
@@ -682,39 +707,113 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         refresh()
     }
 
+    fun rotateYandexLanes(tunnel: Tunnel): Tunnel? {
+        val payload = tunnel.transportConnPayload.toMutableList()
+        val urlsIdx = payload.indexOf("--urls")
+        if (urlsIdx == -1 || urlsIdx + 1 >= payload.size) return null
+        val rawUrls = payload[urlsIdx + 1]
+        val list = rawUrls.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        if (list.size <= 1) return null
+        val rotatedList = list.drop(1) + list.take(1)
+        payload[urlsIdx + 1] = rotatedList.joinToString(",")
+        val urlIdx = payload.indexOf("--url")
+        if (urlIdx != -1 && urlIdx + 1 < payload.size) {
+            payload[urlIdx + 1] = rotatedList.first()
+        }
+        val rotatedTunnel = tunnel.copy(transportConnPayload = payload)
+        val current = repo.load().toMutableList()
+        val idx = current.indexOfFirst { it.id == tunnel.id }
+        if (idx >= 0) {
+            current[idx] = rotatedTunnel
+            repo.save(current)
+            refresh()
+        }
+        return rotatedTunnel
+    }
+
+    fun syncRunningServiceState() {
+        val ctx = getApplication<Application>()
+        if (!bound) {
+            try {
+                ctx.bindService(
+                    Intent(ctx, io.github.p1neapplexpress.openflux.service.SocksVpnService::class.java),
+                    connection,
+                    Context.BIND_AUTO_CREATE
+                )
+            } catch (e: Exception) {
+                Logx.w(TAG, "bindService failed in syncRunningServiceState: ${e.message}")
+            }
+        }
+        val isRunning = runCatching { service?.isVpnRunning == true }.getOrDefault(false) ||
+                (io.github.p1neapplexpress.openflux.service.SocksVpnService.connectedAtRealtime > 0L)
+        if (isRunning) {
+            val tName = io.github.p1neapplexpress.openflux.service.SocksVpnService.activeTunnelName
+            val tunnel = (if (!tName.isNullOrEmpty()) {
+                repo.load().firstOrNull { it.name == tName }
+            } else null) ?: _selected.value ?: repo.getSelected()
+            if (tunnel != null && _active.value !is TunnelState.Running) {
+                _active.value = TunnelState.Running(tunnel)
+                _tunnelHealth.value = TunnelHealth.AVAILABLE
+                startUptimeCounter()
+                startHealthCheckLoop(tunnel)
+                refresh()
+            }
+        } else {
+            if (_active.value is TunnelState.Running && (io.github.p1neapplexpress.openflux.service.SocksVpnService.connectedAtRealtime == 0L)) {
+                _active.value = TunnelState.Idle
+                stopUptimeCounter()
+                healthCheckJob?.cancel()
+                healthCheckJob = null
+                refresh()
+            }
+        }
+    }
+
     private fun startUptimeCounter() {
         uptimeJob?.cancel()
         _uptimeSeconds.value = 0L
         uptimeJob = viewModelScope.launch {
-            val startedAt = System.currentTimeMillis()
-            var ticks = 0
+            val baseTime = if (io.github.p1neapplexpress.openflux.service.SocksVpnService.connectedAtRealtime > 0L) {
+                io.github.p1neapplexpress.openflux.service.SocksVpnService.connectedAtRealtime
+            } else {
+                android.os.SystemClock.elapsedRealtime().also {
+                    io.github.p1neapplexpress.openflux.service.SocksVpnService.connectedAtRealtime = it
+                }
+            }
+            while (isActive) {
+                val now = android.os.SystemClock.elapsedRealtime()
+                _uptimeSeconds.value = ((now - baseTime) / 1000L).coerceAtLeast(0L)
+                delay(1000L)
+            }
+        }
+    }
+
+    private fun startHealthCheckLoop(tunnel: Tunnel) {
+        healthCheckJob?.cancel()
+        healthCheckJob = viewModelScope.launch(Dispatchers.IO) {
+            delay(4000L)
+            probeRunningTunnel(tunnel)
             var consecutiveFailures = 0
             while (isActive) {
-                _uptimeSeconds.value = (System.currentTimeMillis() - startedAt) / 1000L
-                ticks++
-                // Check once every 300 seconds (5 minutes)
-                if (ticks >= 300 && ticks % 300 == 0) {
-                    val currentTunnel = (_active.value as? TunnelState.Running)?.tunnel
-                    if (currentTunnel != null) {
-                        val isAlive = probeRunningTunnel(currentTunnel)
-                        if (isAlive) {
-                            consecutiveFailures = 0
-                            if (_tunnelHealth.value != TunnelHealth.AVAILABLE) {
-                                _tunnelHealth.value = TunnelHealth.AVAILABLE
-                                saveHealth(currentTunnel.id, TunnelHealth.AVAILABLE)
-                            }
-                        } else {
-                            consecutiveFailures++
-                            if (service?.isFServiceRunning() != true || service?.isVpnRunning() != true || consecutiveFailures >= 2) {
-                                _tunnelHealth.value = TunnelHealth.UNAVAILABLE
-                                saveHealth(currentTunnel.id, TunnelHealth.UNAVAILABLE)
-                                pingCache.remove(currentTunnel.id)
-                                _pingMap.value = pingCache.toMap()
-                            }
-                        }
+                delay(300_000L) // 5 minutes
+                val currentTunnel = (_active.value as? TunnelState.Running)?.tunnel ?: break
+                val isAlive = probeRunningTunnel(currentTunnel)
+                if (isAlive) {
+                    consecutiveFailures = 0
+                    if (_tunnelHealth.value != TunnelHealth.AVAILABLE) {
+                        _tunnelHealth.value = TunnelHealth.AVAILABLE
+                        saveHealth(currentTunnel.id, TunnelHealth.AVAILABLE)
+                    }
+                } else {
+                    consecutiveFailures++
+                    if (service?.isFServiceRunning() != true || service?.isVpnRunning() != true || consecutiveFailures >= 2) {
+                        _tunnelHealth.value = TunnelHealth.UNAVAILABLE
+                        saveHealth(currentTunnel.id, TunnelHealth.UNAVAILABLE)
+                        pingCache.remove(currentTunnel.id)
+                        _pingMap.value = pingCache.toMap()
+                        triggerFailoverIfNeeded(currentTunnel)
                     }
                 }
-                delay(1_000L)
             }
         }
     }

@@ -2,10 +2,13 @@ package io.github.p1neapplexpress.openflux.util
 
 import java.net.Authenticator
 import java.net.Inet4Address
+import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.PasswordAuthentication
 import java.net.ServerSocket
 import java.util.UUID
+
 
 object LocalSocksSession {
 
@@ -32,13 +35,13 @@ object LocalSocksSession {
     )
 
     fun generateNew(
-        authEnabled: Boolean = true,
+        authEnabled: Boolean = false,
         customUser: String? = null,
         customPass: String? = null,
         shareLan: Boolean = false,
         customPort: Int? = null
     ): SessionInfo {
-        val port = customPort ?: if (shareLan) 10808 else findAvailablePort()
+        val port = customPort ?: findAvailablePort()
         val username = customUser?.ifBlank { null } ?: generateRandomUsername()
         val password = if (!authEnabled) {
             ""
@@ -54,9 +57,6 @@ object LocalSocksSession {
             isSharedLan = shareLan
         )
         currentSession = session
-        if (authEnabled && password.isNotEmpty()) {
-            setupAuthenticator(session)
-        }
         Logx.i("LocalSocksSession", "Generated SOCKS5 session on port $port, auth=$authEnabled, shareLan=$shareLan, user=$username")
         return session
     }
@@ -64,12 +64,8 @@ object LocalSocksSession {
     fun getActive(): SessionInfo = currentSession
 
     fun setupAuthenticator(session: SessionInfo = currentSession) {
-        if (!session.isAuthEnabled || session.password.isEmpty()) return
-        Authenticator.setDefault(object : Authenticator() {
-            override fun getPasswordAuthentication(): PasswordAuthentication {
-                return PasswordAuthentication(session.username, session.password.toCharArray())
-            }
-        })
+        // Internal Go SOCKS5 listener does not support RFC 1929 authentication.
+        // We do not set global Authenticator.setDefault so loopback probes stay unauthenticated.
     }
 
     fun clearAuthenticator() {
@@ -79,29 +75,43 @@ object LocalSocksSession {
     fun getLocalIpAddress(): String {
         try {
             val interfaces = NetworkInterface.getNetworkInterfaces()?.toList() ?: return "192.168.43.1"
-            // First pass: prioritize Wi-Fi SoftAP / hotspot interfaces
+
+            fun isCellularOrVpn(name: String): Boolean {
+                val n = name.lowercase()
+                return n.startsWith("rmnet") || n.startsWith("ccmni") || n.startsWith("pdp") ||
+                        n.startsWith("wwan") || n.startsWith("tun") || n.startsWith("dummy") ||
+                        n.startsWith("ppp") || n.startsWith("v4-") || n.startsWith("radio")
+            }
+
+            // Priority 1: SoftAP / Wi-Fi Hotspot / USB Tethering interfaces (ap, swlan, rndis)
             for (iface in interfaces) {
                 if (iface.isLoopback || !iface.isUp) continue
                 val name = iface.name.lowercase()
+                if (isCellularOrVpn(name)) continue
+
                 val isAp = name.contains("ap") || name.contains("rndis") || name.contains("swlan") || name == "wlan1"
                 if (isAp) {
                     for (addr in iface.inetAddresses) {
                         if (addr is Inet4Address && !addr.isLoopbackAddress) {
                             val host = addr.hostAddress ?: continue
-                            if (host.startsWith("192.168.") || host.startsWith("10.") || host.startsWith("172.")) {
+                            if (host.startsWith("192.168.") || host.startsWith("172.")) {
                                 return host
                             }
                         }
                     }
                 }
             }
-            // Second pass: general LAN / WLAN interfaces
+
+            // Priority 2: General Wi-Fi LAN interfaces (wlan0, eth0) with private LAN IP
             for (iface in interfaces) {
                 if (iface.isLoopback || !iface.isUp) continue
+                val name = iface.name.lowercase()
+                if (isCellularOrVpn(name)) continue
+
                 for (addr in iface.inetAddresses) {
                     if (addr is Inet4Address && !addr.isLoopbackAddress) {
                         val host = addr.hostAddress ?: continue
-                        if (host.startsWith("192.168.") || host.startsWith("10.") || host.startsWith("172.")) {
+                        if (host.startsWith("192.168.")) {
                             return host
                         }
                     }
@@ -116,14 +126,19 @@ object LocalSocksSession {
             val candidate = (30000..60000).random()
             if (isPortFree(candidate)) return candidate
         }
-        return 10808
+        return (30000..60000).random()
     }
 
     private fun isPortFree(port: Int): Boolean {
         return try {
-            ServerSocket(port).use { true }
+            ServerSocket().use { socket ->
+                socket.reuseAddress = true
+                socket.bind(InetSocketAddress(InetAddress.getByName("127.0.0.1"), port))
+                true
+            }
         } catch (_: Exception) {
             false
         }
     }
 }
+

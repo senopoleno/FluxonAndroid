@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -54,10 +54,10 @@
                 android:layout_marginBottom="10dp"
                 android:clickable="true"
                 android:focusable="true"
-                app:cardBackgroundColor="@color/bg_card"
+                app:cardBackgroundColor="@color/m3_surface_container"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeColor="@color/bg_card_stroke"
+                app:strokeColor="@color/m3_outline_variant"
                 app:strokeWidth="1dp">
 
                 <LinearLayout
@@ -72,7 +72,7 @@
                         android:layout_width="32dp"
                         android:layout_height="32dp"
                         android:src="@drawable/ic_update"
-                        app:tint="@color/accent_blue"
+                        app:tint="@color/m3_primary"
                         android:contentDescription="@null" />
 
                     <LinearLayout
@@ -112,10 +112,10 @@
                 android:layout_marginBottom="10dp"
                 android:clickable="true"
                 android:focusable="true"
-                app:cardBackgroundColor="@color/bg_card"
+                app:cardBackgroundColor="@color/m3_surface_container"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeColor="@color/bg_card_stroke"
+                app:strokeColor="@color/m3_outline_variant"
                 app:strokeWidth="1dp">
 
                 <LinearLayout
@@ -130,7 +130,7 @@
                         android:layout_width="32dp"
                         android:layout_height="32dp"
                         android:src="@drawable/ic_refresh"
-                        app:tint="@color/accent_blue"
+                        app:tint="@color/m3_primary"
                         android:contentDescription="@null" />
 
                     <LinearLayout
@@ -170,10 +170,10 @@
                 android:layout_marginBottom="10dp"
                 android:clickable="true"
                 android:focusable="true"
-                app:cardBackgroundColor="@color/bg_card"
+                app:cardBackgroundColor="@color/m3_surface_container"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeColor="@color/bg_card_stroke"
+                app:strokeColor="@color/m3_outline_variant"
                 app:strokeWidth="1dp">
 
                 <LinearLayout
@@ -228,10 +228,10 @@
                 android:layout_marginBottom="10dp"
                 android:clickable="true"
                 android:focusable="true"
-                app:cardBackgroundColor="@color/bg_card"
+                app:cardBackgroundColor="@color/m3_surface_container"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeColor="@color/bg_card_stroke"
+                app:strokeColor="@color/m3_outline_variant"
                 app:strokeWidth="1dp">
 
                 <LinearLayout
@@ -286,10 +286,10 @@
                 android:layout_marginBottom="10dp"
                 android:clickable="true"
                 android:focusable="true"
-                app:cardBackgroundColor="@color/bg_card"
+                app:cardBackgroundColor="@color/m3_surface_container"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeColor="@color/bg_card_stroke"
+                app:strokeColor="@color/m3_outline_variant"
                 app:strokeWidth="1dp">
 
                 <LinearLayout
@@ -304,7 +304,7 @@
                         android:layout_width="32dp"
                         android:layout_height="32dp"
                         android:src="@drawable/ic_theme"
-                        app:tint="@color/accent_blue"
+                        app:tint="@color/m3_primary"
                         android:contentDescription="@null" />
 
                     <LinearLayout
@@ -345,10 +345,10 @@
                 android:layout_marginBottom="10dp"
                 android:clickable="true"
                 android:focusable="true"
-                app:cardBackgroundColor="@color/bg_card"
+                app:cardBackgroundColor="@color/m3_surface_container"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeColor="@color/bg_card_stroke"
+                app:strokeColor="@color/m3_outline_variant"
                 app:strokeWidth="1dp">
 
                 <LinearLayout

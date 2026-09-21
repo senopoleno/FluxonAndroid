@@ -109,4 +109,11 @@ $RECYCLE.BIN/
 *.bak
 Fluxon_*_backup*
 Fluxon.apk
-EOF
+FluxonCore/
+.agents/
+verify_*.py
+myconversation.md
+openflux-linux-*
+AUDIT_REPORT.md
+PROJECT.md
+ORIGINAL_REQUEST.md

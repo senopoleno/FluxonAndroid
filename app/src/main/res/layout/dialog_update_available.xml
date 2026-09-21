@@ -18,7 +18,7 @@
             android:layout_height="28dp"
             android:layout_gravity="center"
             android:src="@drawable/ic_update"
-            app:tint="@color/accent_blue"
+            app:tint="@color/m3_primary"
             android:contentDescription="@null" />
     </FrameLayout>
 
@@ -39,7 +39,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
         android:gravity="center"
-        android:textColor="@color/accent_blue"
+        android:textColor="@color/m3_primary"
         android:textSize="13sp"
         android:fontFamily="sans-serif-medium"
         tools:text="Version v1.1.0" />
@@ -77,15 +77,15 @@
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:text="@string/action_update_download"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/m3_on_primary"
             android:textSize="14sp"
             android:fontFamily="sans-serif-medium"
             app:icon="@drawable/ic_update"
             app:iconSize="18dp"
-            app:iconTint="#FFFFFF"
+            app:iconTint="@color/m3_on_primary"
             app:iconPadding="8dp"
             app:iconGravity="textStart"
-            app:backgroundTint="@color/accent_blue"
+            app:backgroundTint="@color/m3_primary"
             app:cornerRadius="12dp"
             android:insetTop="0dp"
             android:insetBottom="0dp" />
@@ -100,7 +100,7 @@
             android:textColor="@color/text_secondary"
             android:textSize="14sp"
             android:fontFamily="sans-serif-medium"
-            app:strokeColor="@color/bg_card_stroke"
+            app:strokeColor="@color/m3_outline_variant"
             app:cornerRadius="12dp"
             android:insetTop="0dp"
             android:insetBottom="0dp" />

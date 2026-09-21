@@ -25,7 +25,15 @@ sealed interface TunnelState {
         override val color: Int = 0xFF22C55E.toInt()
     }
 
-    data class Error(val message: String) : TunnelState {
+    data class Reconnecting(override val tunnel: Tunnel) : TunnelState {
+        override val color: Int = 0xFFF59E0B.toInt()
+    }
+
+    data class WaitingForNetwork(override val tunnel: Tunnel? = null) : TunnelState {
+        override val color: Int = 0xFF3B82F6.toInt()
+    }
+
+    data class Error(val message: String, val detail: String? = null) : TunnelState {
         override val tunnel: Tunnel? = null
         override val color: Int = 0xFFEF4444.toInt()
     }
@@ -34,7 +42,9 @@ sealed interface TunnelState {
         get() = this is Connecting ||
                 this is StartingTransport ||
                 this is StartingTun2Socks ||
-                this is Running
+                this is Running ||
+                this is Reconnecting ||
+                this is WaitingForNetwork
 }
 
 enum class TunnelHealth {

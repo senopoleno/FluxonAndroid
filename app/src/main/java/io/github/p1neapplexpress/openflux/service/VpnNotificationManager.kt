@@ -24,7 +24,9 @@ import android.os.Process
 
 import android.os.SystemClock
 
+import android.content.pm.ServiceInfo
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 
 import io.github.p1neapplexpress.openflux.R
 
@@ -125,9 +127,17 @@ class VpnNotificationManager(private val service: Service) {
         }
 
         createChannel()
-
-        service.startForeground(NOTIFICATION_ID, buildNotification(service.getString(R.string.running)))
-
+        val notification = buildNotification(service.getString(R.string.running))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val fgsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            } else {
+                0
+            }
+            ServiceCompat.startForeground(service, NOTIFICATION_ID, notification, fgsType)
+        } else {
+            service.startForeground(NOTIFICATION_ID, notification)
+        }
     }
 
     fun startSpeedUpdates() {

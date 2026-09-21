@@ -20,6 +20,7 @@ import io.github.p1neapplexpress.openflux.R
 import io.github.p1neapplexpress.openflux.data.Tunnel
 import io.github.p1neapplexpress.openflux.util.QrGenerator
 import io.github.p1neapplexpress.openflux.util.TunnelLinkParser
+import io.github.p1neapplexpress.openflux.util.performAppHaptics
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -36,7 +37,7 @@ object QrShareDialog {
         val json = runCatching { Json.encodeToString(exportTunnel) }.getOrNull() ?: return
         val configLink = TunnelLinkParser.toLink(exportTunnel, context)
         val qrBitmap = QrGenerator.generateQrBitmap(configLink, 600) ?: run {
-            Toast.makeText(context, "Не удалось сгенерировать QR-код", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, R.string.qr_generate_error, Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -51,19 +52,19 @@ object QrShareDialog {
         view.findViewById<ImageView>(R.id.qr_image).setImageBitmap(qrBitmap)
 
         view.findViewById<View>(R.id.btn_close_dialog).setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             dialog.dismiss()
         }
 
         val copyBtn = view.findViewById<View>(R.id.btn_copy_json)
         copyBtn.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             cm.setPrimaryClip(ClipData.newPlainText("Fluxon Config Link", configLink))
             Toast.makeText(context, R.string.config_link_copied, Toast.LENGTH_SHORT).show()
         }
         copyBtn.setOnLongClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            it.performAppHaptics(HapticFeedbackConstants.LONG_PRESS)
             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             cm.setPrimaryClip(ClipData.newPlainText("Fluxon JSON", json))
             Toast.makeText(context, R.string.copied_to_clipboard, Toast.LENGTH_SHORT).show()
@@ -71,7 +72,7 @@ object QrShareDialog {
         }
 
         view.findViewById<View>(R.id.btn_share_qr).setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val imagesDir = File(context.cacheDir, "shared_images").apply { mkdirs() }
@@ -102,7 +103,7 @@ object QrShareDialog {
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Не удалось поделиться: ${e.message}", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.qr_save_error, e.localizedMessage ?: "Unknown error"), Toast.LENGTH_SHORT).show()
                     }
                 }
             }

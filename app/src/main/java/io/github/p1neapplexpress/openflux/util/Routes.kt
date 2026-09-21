@@ -1,4 +1,4 @@
-﻿package io.github.p1neapplexpress.openflux.util
+package io.github.p1neapplexpress.openflux.util
 
 import android.content.Context
 import android.net.VpnService
@@ -17,7 +17,7 @@ object Routes {
         "128.0.0.0/3",
         "160.0.0.0/5",
         "168.0.0.0/6",
-        "172.16.0.0/12",
+        "172.0.0.0/12",
         "172.32.0.0/11",
         "172.64.0.0/10",
         "172.128.0.0/9",

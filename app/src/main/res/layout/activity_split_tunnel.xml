@@ -195,7 +195,8 @@
                             android:text="@string/tab_bypass"
                             android:textAllCaps="false"
                             android:textSize="13sp"
-                            app:cornerRadius="10dp"
+                            app:cornerRadius="12dp"
+                        app:strokeColor="@color/m3_outline_variant"
                             android:insetTop="0dp"
                             android:insetBottom="0dp" />
 
@@ -208,7 +209,8 @@
                             android:text="@string/tab_proxy"
                             android:textAllCaps="false"
                             android:textSize="13sp"
-                            app:cornerRadius="10dp"
+                            app:cornerRadius="12dp"
+                        app:strokeColor="@color/m3_outline_variant"
                             android:insetTop="0dp"
                             android:insetBottom="0dp" />
 
@@ -259,7 +261,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:textColor="@color/accent_blue"
+                        android:textColor="@color/m3_primary"
                         android:textSize="14sp"
                         android:fontFamily="sans-serif-bold"
                         tools:text="Выбрано: 15 из 82" />
@@ -299,7 +301,8 @@
                         app:icon="@drawable/ic_check"
                         app:iconSize="16dp"
                         app:iconTint="@color/text_secondary"
-                        app:cornerRadius="10dp"
+                        app:cornerRadius="12dp"
+                        app:strokeColor="@color/m3_outline_variant"
                         android:insetTop="0dp"
                         android:insetBottom="0dp" />
 
@@ -317,7 +320,8 @@
                         app:icon="@drawable/ic_refresh"
                         app:iconSize="16dp"
                         app:iconTint="@color/text_secondary"
-                        app:cornerRadius="10dp"
+                        app:cornerRadius="12dp"
+                        app:strokeColor="@color/m3_outline_variant"
                         android:insetTop="0dp"
                         android:insetBottom="0dp" />
 
@@ -326,7 +330,7 @@
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
-                    android:background="@color/bg_card_stroke" />
+                    android:background="@color/m3_outline_variant" />
 
                 <!-- Apps List & States -->
                 <FrameLayout
@@ -349,7 +353,7 @@
                         android:layout_gravity="center"
                         android:layout_marginTop="40dp"
                         android:layout_marginBottom="40dp"
-                        android:indeterminateTint="@color/accent_blue" />
+                        android:indeterminateTint="@color/m3_primary" />
 
                     <LinearLayout
                         android:id="@+id/empty_state"
@@ -414,7 +418,8 @@
                             android:text="@string/tab_bypass"
                             android:textAllCaps="false"
                             android:textSize="13sp"
-                            app:cornerRadius="10dp"
+                            app:cornerRadius="12dp"
+                        app:strokeColor="@color/m3_outline_variant"
                             android:insetTop="0dp"
                             android:insetBottom="0dp" />
 
@@ -427,7 +432,8 @@
                             android:text="@string/tab_proxy"
                             android:textAllCaps="false"
                             android:textSize="13sp"
-                            app:cornerRadius="10dp"
+                            app:cornerRadius="12dp"
+                        app:strokeColor="@color/m3_outline_variant"
                             android:insetTop="0dp"
                             android:insetBottom="0dp" />
 
@@ -477,7 +483,7 @@
                         android:id="@+id/sites_count_text"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:textColor="@color/accent_blue"
+                        android:textColor="@color/m3_primary"
                         android:textSize="14sp"
                         android:fontFamily="sans-serif-bold"
                         tools:text="Добавлено: 12" />
@@ -505,7 +511,8 @@
                         app:icon="@drawable/ic_add"
                         app:iconSize="16dp"
                         app:iconTint="@color/text_secondary"
-                        app:cornerRadius="10dp"
+                        app:cornerRadius="12dp"
+                        app:strokeColor="@color/m3_outline_variant"
                         android:insetTop="0dp"
                         android:insetBottom="0dp" />
 
@@ -534,7 +541,8 @@
                         app:icon="@drawable/ic_domain"
                         app:iconSize="16dp"
                         app:iconTint="@color/text_secondary"
-                        app:cornerRadius="10dp"
+                        app:cornerRadius="12dp"
+                        app:strokeColor="@color/m3_outline_variant"
                         android:insetTop="0dp"
                         android:insetBottom="0dp" />
 
@@ -552,7 +560,8 @@
                         app:icon="@drawable/ic_delete"
                         app:iconSize="16dp"
                         app:iconTint="@color/text_secondary"
-                        app:cornerRadius="10dp"
+                        app:cornerRadius="12dp"
+                        app:strokeColor="@color/m3_outline_variant"
                         android:insetTop="0dp"
                         android:insetBottom="0dp" />
 
@@ -561,7 +570,7 @@
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
-                    android:background="@color/bg_card_stroke" />
+                    android:background="@color/m3_outline_variant" />
 
                 <!-- Sites Recycler & Empty State -->
                 <FrameLayout

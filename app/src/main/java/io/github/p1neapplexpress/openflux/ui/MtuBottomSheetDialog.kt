@@ -11,6 +11,7 @@ import com.google.android.material.chip.ChipGroup
 import com.google.android.material.textfield.TextInputEditText
 import io.github.p1neapplexpress.openflux.R
 import io.github.p1neapplexpress.openflux.util.AppSettings
+import io.github.p1neapplexpress.openflux.util.performAppHaptics
 
 class MtuBottomSheetDialog(
     context: Context,
@@ -30,7 +31,7 @@ class MtuBottomSheetDialog(
         input.setSelection(input.text?.length ?: 0)
 
         btnSave?.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             val text = input.text?.toString()?.trim()
             val value = text?.toIntOrNull() ?: currentMtu
             val clamped = value.coerceIn(AppSettings.MIN_MTU, AppSettings.MAX_MTU)
@@ -39,7 +40,7 @@ class MtuBottomSheetDialog(
         }
 
         btnCancel?.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             dismiss()
         }
     }

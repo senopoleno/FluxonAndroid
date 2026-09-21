@@ -16,6 +16,7 @@ import io.github.p1neapplexpress.openflux.BuildConfig
 import io.github.p1neapplexpress.openflux.R
 import io.github.p1neapplexpress.openflux.util.AppUpdateChecker
 import io.github.p1neapplexpress.openflux.util.Logx
+import io.github.p1neapplexpress.openflux.util.performAppHaptics
 
 object DebugMenuHelper {
 
@@ -26,7 +27,7 @@ object DebugMenuHelper {
 
         // 1. Force check update
         sheetView.findViewById<View>(R.id.card_debug_check_update).setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             bottomSheet.dismiss()
             Toast.makeText(activity, "Проверка обновлений на GitHub…", Toast.LENGTH_SHORT).show()
             AppUpdateChecker.checkForUpdate(activity, force = true) { hasUpdate, versionOrError ->
@@ -42,21 +43,21 @@ object DebugMenuHelper {
 
         // 2. Test update dialog (simulation)
         sheetView.findViewById<View>(R.id.card_debug_test_update_dialog).setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             bottomSheet.dismiss()
             AppUpdateChecker.showTestUpdateDialog(activity)
         }
 
         // 3. Reset 24h timer
         sheetView.findViewById<View>(R.id.card_debug_reset_update_timer).setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             AppUpdateChecker.resetLastCheckTime(activity)
             Toast.makeText(activity, R.string.debug_timer_reset_toast, Toast.LENGTH_SHORT).show()
         }
 
         // 4. Generate test logs
         sheetView.findViewById<View>(R.id.card_debug_generate_logs).setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             Logx.d("TestDebug", "Тестовый отладочный лог (DEBUG). Проверка цвета [D]")
             Logx.i("TestInfo", "Тестовый информационный лог (INFO). Проверка цвета [I]")
             Logx.w("TestWarning", "Тестовое предупреждение (WARNING). Проверка цвета [W]")
@@ -73,7 +74,7 @@ object DebugMenuHelper {
         updateVerboseStatus()
 
         sheetView.findViewById<View>(R.id.card_debug_toggle_verbose).setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             Logx.setVerbose(!Logx.isVerbose)
             updateVerboseStatus()
             val state = if (Logx.isVerbose) "DEBUG" else "INFO"
@@ -82,7 +83,7 @@ object DebugMenuHelper {
 
         // 6. Test delete dialog
         sheetView.findViewById<View>(R.id.card_debug_test_delete_dialog).setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             bottomSheet.dismiss()
             showTestDeleteDialog(activity)
         }
@@ -108,12 +109,12 @@ object DebugMenuHelper {
             "«Тестовая конфигурация»\n${activity.getString(R.string.delete_config_msg)}"
 
         dialogView.findViewById<View>(R.id.btn_cancel).setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             dialog.dismiss()
         }
 
         dialogView.findViewById<View>(R.id.btn_delete).setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             dialog.dismiss()
             Toast.makeText(activity, "Тестовое удаление подтверждено", Toast.LENGTH_SHORT).show()
         }

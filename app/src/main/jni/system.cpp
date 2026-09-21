@@ -11,6 +11,8 @@
 #include <sys/un.h>
 #include <sys/socket.h>
 #include <ancillary.h>
+#include <sys/prctl.h>
+#include <signal.h>
 
 #define LOGI(...) do { __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__); } while(0)
 #define LOGW(...) do { __android_log_print(ANDROID_LOG_WARN,  LOG_TAG, __VA_ARGS__); } while(0)
@@ -61,16 +63,23 @@ Java_io_github_p1neapplexpress_openflux_NativeBridge_sendfd(
     return 0;
 }
 
-// NativeBridge lives in the root package
-// io.github.p1neapplexpress.libp1npplydtransport.so (no `native` subpackage).
+extern "C" JNIEXPORT jint JNICALL
+Java_io_github_p1neapplexpress_openflux_NativeBridge_setParentDeathSignal(
+        JNIEnv *env, jclass clazz, jint sig) {
+    return (jint) prctl(PR_SET_PDEATHSIG, sig);
+}
+
+// NativeBridge lives in the root package io.github.p1neapplexpress.openflux.
 static const char *classPathName =
-        "io/github/p1neapplexpress/libp1npplydtransport.so/NativeBridge";
+        "io/github/p1neapplexpress/openflux/NativeBridge";
 
 static JNINativeMethod method_table[] = {
         { "jniclose", "(I)V",
                 (void*) Java_io_github_p1neapplexpress_openflux_NativeBridge_jniclose },
         { "sendfd", "(ILjava/lang/String;)I",
-                (void*) Java_io_github_p1neapplexpress_openflux_NativeBridge_sendfd }
+                (void*) Java_io_github_p1neapplexpress_openflux_NativeBridge_sendfd },
+        { "setParentDeathSignal", "(I)I",
+                (void*) Java_io_github_p1neapplexpress_openflux_NativeBridge_setParentDeathSignal }
 };
 
 static int registerNativeMethods(JNIEnv* env, const char* className,

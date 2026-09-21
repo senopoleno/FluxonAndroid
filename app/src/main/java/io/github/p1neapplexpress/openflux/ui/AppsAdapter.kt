@@ -10,6 +10,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.checkbox.MaterialCheckBox
 import io.github.p1neapplexpress.openflux.R
 import io.github.p1neapplexpress.openflux.data.AppItem
+import io.github.p1neapplexpress.openflux.util.performAppHaptics
 
 class AppsAdapter(
     private val onAppSelectionChanged: (AppItem) -> Unit
@@ -79,7 +80,7 @@ class AppsAdapter(
             checkBox.isChecked = item.isSelected
 
             itemView.setOnClickListener {
-                it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
                 item.isSelected = !item.isSelected
                 checkBox.isChecked = item.isSelected
                 onAppSelectionChanged(item)

@@ -1,21 +1,41 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# Project ProGuard / R8 Rules for Fluxon
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Keep JNI Bridge and native methods
+-keepclassmembers class io.github.p1neapplexpress.openflux.NativeBridge {
+    public *;
+    native <methods>;
+}
+-keep class io.github.p1neapplexpress.openflux.NativeBridge { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Keep AIDL interfaces
+-keep class io.github.p1neapplexpress.openflux.IUnifiedService* { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Keep Custom Views instantiated in XML
+-keep class io.github.p1neapplexpress.openflux.ui.widget.** {
+    public <init>(android.content.Context);
+    public <init>(android.content.Context, android.util.AttributeSet);
+    public <init>(android.content.Context, android.util.AttributeSet, int);
+    *;
+}
+
+# Kotlinx Serialization
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.SerializationKt
+
+-keepclassmembers class * {
+    @kotlinx.serialization.SerialName <fields>;
+}
+
+-keepclassmembers class * {
+    *** Companion;
+    *** serializer();
+}
+
+-keep class io.github.p1neapplexpress.openflux.data.** { *; }
+-keep class io.github.p1neapplexpress.openflux.util.AppUpdateChecker$** { *; }
+-keep class io.github.p1neapplexpress.openflux.util.ConfigBackupManager$** { *; }
+
+# Quickie, ZXing, and ML Kit
+-dontwarn io.github.g00fy2.quickie.**
+-dontwarn com.google.zxing.**
+-dontwarn com.google.mlkit.**

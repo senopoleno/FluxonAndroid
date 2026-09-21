@@ -20,13 +20,14 @@ object ProcessRunner {
             val pb = ProcessBuilder(command).redirectErrorStream(true)
             if (workingDir != null) pb.directory(File(workingDir))
             val p = pb.start()
+            runCatching { p.outputStream.close() }
             activeProcesses.add(p)
             Thread {
                 try {
                     p.inputStream.bufferedReader().useLines { lines ->
                         lines.forEach { line ->
                             if (line.isNotBlank()) {
-                                android.util.Log.d("Exec", line)
+                                Logx.i(TAG, line)
                             }
                         }
                     }

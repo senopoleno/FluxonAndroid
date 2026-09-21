@@ -56,7 +56,8 @@ class FluxonTileService : TileService() {
         tileJob = scope.launch {
             io.github.p1neapplexpress.openflux.event.EventBus.events.collect { event ->
                 when (event) {
-                    is io.github.p1neapplexpress.openflux.event.AppEvent.TransportConnected -> updateTileState()
+                    is io.github.p1neapplexpress.openflux.event.AppEvent.TransportConnected,
+                    is io.github.p1neapplexpress.openflux.event.AppEvent.VpnConnected -> updateTileState()
                     is io.github.p1neapplexpress.openflux.event.AppEvent.VpnDisconnected,
                     is io.github.p1neapplexpress.openflux.event.AppEvent.TransportDisconnected -> updateTileState()
                     else -> Unit
@@ -76,42 +77,82 @@ class FluxonTileService : TileService() {
 
     override fun onClick() {
         super.onClick()
-        val isRunning = runCatching { unifiedService?.isVpnRunning == true }.getOrDefault(false)
+        val isVpnActive = runCatching { unifiedService?.isVpnRunning == true }.getOrDefault(false) ||
+                (SocksVpnService.connectedAtRealtime > 0L)
+        val isProxyActive = FluxonProxyService.isProxyRunning
+        val isRunning = isVpnActive || isProxyActive
 
         if (isRunning) {
-            val disconnectIntent = Intent(this, SocksVpnService::class.java).apply {
-                action = SocksVpnService.ACTION_DISCONNECT
+            if (isVpnActive) {
+                val disconnectIntent = Intent(this, SocksVpnService::class.java).apply {
+                    action = SocksVpnService.ACTION_DISCONNECT
+                }
+                startService(disconnectIntent)
             }
-            startService(disconnectIntent)
+            if (isProxyActive) {
+                val disconnectIntent = Intent(this, FluxonProxyService::class.java).apply {
+                    action = FluxonProxyService.ACTION_DISCONNECT
+                }
+                startService(disconnectIntent)
+            }
             setTileInactive()
         } else {
-            val prepareIntent = android.net.VpnService.prepare(this)
-            if (prepareIntent != null) {
-                val launchIntent = Intent(this, MainActivity::class.java).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val appSettings = AppSettings(this)
+            if (!appSettings.proxyOnlyMode) {
+                val prepareIntent = android.net.VpnService.prepare(this)
+                if (prepareIntent != null) {
+                    val launchIntent = Intent(this, MainActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        val pending = android.app.PendingIntent.getActivity(
+                            this, 0, launchIntent,
+                            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+                        )
+                        startActivityAndCollapse(pending)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        startActivityAndCollapse(launchIntent)
+                    }
+                    return
                 }
-                startActivityAndCollapse(launchIntent)
-                return
             }
+            startActiveOrFirstTunnel()
+        }
+    }
 
-            val repo = TunnelRepository(this)
-            val selected = repo.getSelected()
-            if (selected == null) {
-                val launchIntent = Intent(this, MainActivity::class.java).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                startActivityAndCollapse(launchIntent)
-                return
+    private fun startActiveOrFirstTunnel() {
+        val repo = TunnelRepository(this)
+        val tunnel = repo.getSelected()
+        if (tunnel != null) {
+            connectTunnel(tunnel)
+            val tile = qsTile ?: return
+            tile.state = Tile.STATE_INACTIVE
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                tile.subtitle = getString(R.string.connecting)
             }
-
-            connectTunnel(selected)
-            setTileActive(selected.name)
+            tile.updateTile()
+        } else {
+            val launchIntent = Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val pending = android.app.PendingIntent.getActivity(
+                    this, 0, launchIntent,
+                    android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+                )
+                startActivityAndCollapse(pending)
+            } else {
+                @Suppress("DEPRECATION")
+                startActivityAndCollapse(launchIntent)
+            }
         }
     }
 
     private fun updateTileState() {
         val tile = qsTile ?: return
-        val isRunning = runCatching { unifiedService?.isVpnRunning == true }.getOrDefault(false)
+        val isRunning = runCatching { unifiedService?.isVpnRunning == true }.getOrDefault(false) ||
+                (SocksVpnService.connectedAtRealtime > 0L)
 
         if (isRunning) {
             val repo = TunnelRepository(this)
@@ -145,9 +186,14 @@ class FluxonTileService : TileService() {
     private fun connectTunnel(tunnel: io.github.p1neapplexpress.openflux.data.Tunnel) {
         val prepared = TunnelLinkParser.ensureLocalKeyFile(this, tunnel)
         val splitPrefs = SplitTunnelPreferences(this)
+        val isSplitEnabled = splitPrefs.isEnabled
         val appBypass = splitPrefs.mode == SplitTunnelPreferences.MODE_BYPASS
-        val selectedApps = if (appBypass) splitPrefs.bypassApps else splitPrefs.proxyApps
-        val perApp = selectedApps.isNotEmpty()
+        val selectedApps = if (isSplitEnabled) {
+            if (appBypass) splitPrefs.bypassApps else splitPrefs.proxyApps
+        } else {
+            emptySet()
+        }
+        val perApp = isSplitEnabled && selectedApps.isNotEmpty()
         val appList = selectedApps.toTypedArray()
 
         val appSettings = AppSettings(this)
@@ -155,8 +201,7 @@ class FluxonTileService : TileService() {
             authEnabled = appSettings.socks5AuthEnabled,
             customUser = appSettings.socks5CustomUser,
             customPass = appSettings.socks5CustomPass,
-            shareLan = appSettings.shareLanProxy,
-            customPort = if (appSettings.shareLanProxy) appSettings.lanProxyPort else null
+            shareLan = appSettings.shareLanProxy
         )
 
         val modifiedPayload = prepared.transportConnPayload.toMutableList()
@@ -173,16 +218,36 @@ class FluxonTileService : TileService() {
         removeFlag("--socks5-user")
         removeFlag("-socks5-pass")
         removeFlag("--socks5-pass")
+        removeFlag("--domain-rules-file")
+        removeFlag("-domain-rules-file")
+        removeFlag("--domain-mode")
+        removeFlag("-domain-mode")
 
         modifiedPayload.add("--socks5")
         modifiedPayload.add("127.0.0.1:${session.port}")
+
+        val effectiveDoh = !appSettings.useSystemDns && appSettings.dohEnabled
+        if (effectiveDoh && appSettings.dohUrl.isNotBlank()) {
+            modifiedPayload.add("--doh-url")
+            modifiedPayload.add(appSettings.dohUrl)
+            modifiedPayload.add("--doh")
+        }
+
+        val domainPrefs = io.github.p1neapplexpress.openflux.util.DomainRulesPreferences(this)
+        if (domainPrefs.hasActiveRules()) {
+            val rulesFile = domainPrefs.writeRulesFile(this)
+            modifiedPayload.add("--domain-rules-file")
+            modifiedPayload.add(rulesFile.absolutePath)
+            modifiedPayload.add("--domain-mode")
+            modifiedPayload.add(domainPrefs.getModeString())
+        }
 
         val (remoteHost, remotePort) = io.github.p1neapplexpress.openflux.vpn.TunnelEndpointHelper.extractTarget(prepared)
         val cfg = VPNConfig(
             name = prepared.name,
             port = session.port,
-            username = session.username,
-            password = session.password,
+            username = if (session.isAuthEnabled && session.password.isNotEmpty()) session.username else null,
+            password = if (session.isAuthEnabled && session.password.isNotEmpty()) session.password else null,
             dns = appSettings.primaryDns,
             secondaryDns = appSettings.secondaryDns,
             mtu = appSettings.mtu,
@@ -197,17 +262,33 @@ class FluxonTileService : TileService() {
             remotePort = remotePort,
             transportType = prepared.transportType,
             transportPayload = modifiedPayload.toTypedArray(),
+            dohEnabled = effectiveDoh,
+            dohUrl = if (effectiveDoh) appSettings.dohUrl else null,
         )
 
-        val intent = VpnIntentFactory.build(this, cfg).apply {
-            putExtra(io.github.p1neapplexpress.openflux.util.Constants.INTENT_AUTONOMOUS, true)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
+        if (appSettings.proxyOnlyMode) {
+            val proxyIntent = Intent(this, FluxonProxyService::class.java).apply {
+                putExtra(io.github.p1neapplexpress.openflux.util.Constants.INTENT_NAME, prepared.name)
+                putExtra(io.github.p1neapplexpress.openflux.util.Constants.INTENT_TRANSPORT_TYPE, prepared.transportType)
+                putExtra(io.github.p1neapplexpress.openflux.util.Constants.INTENT_TRANSPORT_PAYLOAD, modifiedPayload.toTypedArray())
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(proxyIntent)
+            } else {
+                startService(proxyIntent)
+            }
         } else {
-            startService(intent)
+            val intent = VpnIntentFactory.build(this, cfg).apply {
+                putExtra(io.github.p1neapplexpress.openflux.util.Constants.INTENT_AUTONOMOUS, true)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
         }
     }
+
 
     private fun bindVpnService() {
         if (!bound) {

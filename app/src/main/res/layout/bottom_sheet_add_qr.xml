@@ -41,10 +41,10 @@
         android:layout_height="wrap_content"
         android:clickable="true"
         android:focusable="true"
-        app:cardBackgroundColor="@color/bg_card"
+        app:cardBackgroundColor="@color/m3_surface_container"
         app:cardCornerRadius="16dp"
         app:cardElevation="0dp"
-        app:strokeColor="@color/bg_card_stroke"
+        app:strokeColor="@color/m3_outline_variant"
         app:strokeWidth="1dp">
 
         <LinearLayout
@@ -59,7 +59,7 @@
                 android:layout_width="32dp"
                 android:layout_height="32dp"
                 android:src="@drawable/ic_camera"
-                app:tint="@color/accent_blue"
+                app:tint="@color/m3_primary"
                 android:contentDescription="@null" />
 
             <LinearLayout
@@ -99,10 +99,10 @@
         android:layout_marginTop="10dp"
         android:clickable="true"
         android:focusable="true"
-        app:cardBackgroundColor="@color/bg_card"
+        app:cardBackgroundColor="@color/m3_surface_container"
         app:cardCornerRadius="16dp"
         app:cardElevation="0dp"
-        app:strokeColor="@color/bg_card_stroke"
+        app:strokeColor="@color/m3_outline_variant"
         app:strokeWidth="1dp">
 
         <LinearLayout
@@ -117,7 +117,7 @@
                 android:layout_width="32dp"
                 android:layout_height="32dp"
                 android:src="@drawable/ic_gallery"
-                app:tint="@color/accent_blue"
+                app:tint="@color/m3_primary"
                 android:contentDescription="@null" />
 
             <LinearLayout
@@ -157,10 +157,10 @@
         android:layout_marginTop="10dp"
         android:clickable="true"
         android:focusable="true"
-        app:cardBackgroundColor="@color/bg_card"
+        app:cardBackgroundColor="@color/m3_surface_container"
         app:cardCornerRadius="16dp"
         app:cardElevation="0dp"
-        app:strokeColor="@color/bg_card_stroke"
+        app:strokeColor="@color/m3_outline_variant"
         app:strokeWidth="1dp">
 
         <LinearLayout
@@ -175,7 +175,7 @@
                 android:layout_width="32dp"
                 android:layout_height="32dp"
                 android:src="@drawable/ic_link"
-                app:tint="@color/accent_blue"
+                app:tint="@color/m3_primary"
                 android:contentDescription="@null" />
 
             <LinearLayout
@@ -198,6 +198,64 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
                     android:text="@string/import_from_link_desc"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Option 4: Enter manually -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/option_manual"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:clickable="true"
+        android:focusable="true"
+        app:cardBackgroundColor="@color/m3_surface_container"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="0dp"
+        app:strokeColor="@color/m3_outline_variant"
+        app:strokeWidth="1dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="14dp">
+
+            <ImageView
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/ic_edit"
+                app:tint="@color/m3_primary"
+                android:contentDescription="@null" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="14dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/enter_manually"
+                    android:textColor="@color/text_primary"
+                    android:textSize="15sp"
+                    android:fontFamily="sans-serif-medium" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="@string/add_manual_desc"
                     android:textColor="@color/text_secondary"
                     android:textSize="12sp" />
 

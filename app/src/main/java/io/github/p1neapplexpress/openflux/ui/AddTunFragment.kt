@@ -1,27 +1,26 @@
 package io.github.p1neapplexpress.openflux.ui
 
 import android.os.Bundle
+import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
-import android.widget.PopupWindow
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
-import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.activityViewModels
-import com.google.android.material.materialswitch.MaterialSwitch
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.textfield.TextInputLayout
 import io.github.p1neapplexpress.openflux.R
 import io.github.p1neapplexpress.openflux.data.TransportType
 import io.github.p1neapplexpress.openflux.data.Tunnel
 import io.github.p1neapplexpress.openflux.event.AppEvent
-import io.github.p1neapplexpress.openflux.util.dpToPx
+import io.github.p1neapplexpress.openflux.util.performAppHaptics
 import kotlinx.serialization.json.Json
 import java.io.File
-import kotlin.random.Random
 
 class AddTunFragment : BaseFragment() {
 
@@ -39,7 +38,6 @@ class AddTunFragment : BaseFragment() {
 
     private val vm: TunnelsViewModel by activityViewModels()
     private var transport = TransportType.yandex
-    private var debug = false
     private var editing: Tunnel? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,16 +53,16 @@ class AddTunFragment : BaseFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val btnBack = view.findViewById<View>(R.id.btn_back)
-        val headerTitle = view.findViewById<TextView>(R.id.headerTitle)
+        val toolbarTitle = view.findViewById<TextView>(R.id.toolbar_title)
         val nameContainer = view.findViewById<TextInputLayout>(R.id.nameContainer)
         val transportLayout = view.findViewById<View>(R.id.select_transport_layout)
+        val transportIcon = view.findViewById<ImageView>(R.id.transport_icon)
         val maxContainer = view.findViewById<View>(R.id.maxContainer)
         val maxTokenContainer = view.findViewById<TextInputLayout>(R.id.maxTokenContainer)
         val maxUserIdContainer = view.findViewById<TextInputLayout>(R.id.maxUserIdContainer)
         val yandexContainer = view.findViewById<TextInputLayout>(R.id.yandexUrlContainer)
         val encryptionKeyContainer = view.findViewById<TextInputLayout>(R.id.encryptionKeyContainer)
         val transportLabel = view.findViewById<TextView>(R.id.selectedTransport)
-        val debugSwitch = view.findViewById<MaterialSwitch>(R.id.debugSwitch)
         val docUrl = view.findViewById<TextView>(R.id.documentUrl)
         val maxToken = view.findViewById<TextView>(R.id.maxToken)
         val maxUid = view.findViewById<TextView>(R.id.maxUserId)
@@ -73,48 +71,84 @@ class AddTunFragment : BaseFragment() {
         val save = view.findViewById<Button>(R.id.saveButton)
 
         btnBack.setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             requireActivity().onBackPressedDispatcher.onBackPressed()
         }
 
+        fun TextInputLayout.clearError() {
+            error = null
+            isErrorEnabled = false
+        }
+
         // Clear errors on typing
-        name.doAfterTextChanged { nameContainer.error = null }
-        docUrl.doAfterTextChanged { yandexContainer.error = null }
-        maxToken.doAfterTextChanged { maxTokenContainer.error = null }
-        maxUid.doAfterTextChanged { maxUserIdContainer.error = null }
-        encryptionKey.doAfterTextChanged { encryptionKeyContainer.error = null }
+        name.doAfterTextChanged { nameContainer.clearError() }
+        docUrl.doAfterTextChanged { yandexContainer.clearError() }
+        maxToken.doAfterTextChanged { maxTokenContainer.clearError() }
+        maxUid.doAfterTextChanged { maxUserIdContainer.clearError() }
+        encryptionKey.doAfterTextChanged { encryptionKeyContainer.clearError() }
+
+        fun updateTransportUi(type: TransportType) {
+            transport = type
+            when (type) {
+                TransportType.yandex -> {
+                    transportIcon.setImageResource(R.drawable.yandex_docs)
+                    transportLabel.text = getString(R.string.yandex_docs_backend)
+                    maxContainer.isVisible = false
+                    yandexContainer.isVisible = true
+                    yandexContainer.hint = getString(R.string.document_url)
+                }
+                TransportType.vyandex -> {
+                    transportIcon.setImageResource(R.drawable.volga)
+                    transportLabel.text = getString(R.string.vyandex_backend)
+                    maxContainer.isVisible = false
+                    yandexContainer.isVisible = true
+                    yandexContainer.hint = getString(R.string.document_url)
+                }
+                TransportType.max -> {
+                    transportIcon.setImageResource(R.drawable.max_msg)
+                    transportLabel.text = getString(R.string.max_messenger_backend)
+                    maxContainer.isVisible = true
+                    yandexContainer.isVisible = false
+                }
+                TransportType.cups -> {
+                    transportIcon.setImageResource(R.drawable.ic_cups)
+                    transportLabel.text = getString(R.string.cups_backend)
+                    maxContainer.isVisible = false
+                    yandexContainer.isVisible = true
+                    yandexContainer.hint = getString(R.string.cups_url_hint)
+                }
+                TransportType.mailru -> {
+                    transportIcon.setImageResource(R.drawable.ic_mailru)
+                    transportLabel.text = getString(R.string.mailru_backend)
+                    maxContainer.isVisible = false
+                    yandexContainer.isVisible = true
+                    yandexContainer.hint = getString(R.string.mailru_url_hint)
+                }
+            }
+            yandexContainer.clearError()
+            maxTokenContainer.clearError()
+            maxUserIdContainer.clearError()
+        }
 
         // ─── Заполнение при редактировании ───
         editing?.let { t ->
-            headerTitle.text = getString(R.string.edit_config)
+            toolbarTitle.text = getString(R.string.edit_config)
             name.setText(t.name)
-            transport = TransportType.from(t.transportType)
+            val initialTransport = TransportType.from(t.transportType)
+            updateTransportUi(initialTransport)
 
-            when (transport) {
-                TransportType.yandex -> {
-                    maxContainer.isVisible = false
-                    yandexContainer.isVisible = true
-                    transportLabel.text = getString(R.string.yandex_docs_backend)
-                    docUrl.setText(argValue(t.transportConnPayload, "--url"))
-                }
-                TransportType.vyandex -> {
-                    maxContainer.isVisible = false
-                    yandexContainer.isVisible = true
-                    transportLabel.text = getString(R.string.vyandex_backend)
-                    docUrl.setText(argValue(t.transportConnPayload, "--url"))
+            when (initialTransport) {
+                TransportType.yandex, TransportType.vyandex -> {
+                    val urlsVal = argValue(t.transportConnPayload, "--urls")
+                    val displayUrl = if (urlsVal.isNotEmpty()) urlsVal.split(",").joinToString("\n") else argValue(t.transportConnPayload, "--url")
+                    docUrl.setText(displayUrl)
                 }
                 TransportType.max -> {
-                    maxContainer.isVisible = true
-                    yandexContainer.isVisible = false
-                    transportLabel.text = getString(R.string.max_messenger_backend)
                     maxToken.setText(argValue(t.transportConnPayload, "--maxToken"))
                     maxUid.setText(argValue(t.transportConnPayload, "--maxUid"))
                 }
-                TransportType.cups -> {
-                    maxContainer.isVisible = false
-                    yandexContainer.isVisible = true
-                    transportLabel.text = getString(R.string.cups_backend)
+                TransportType.cups, TransportType.mailru -> {
                     docUrl.setText(argValue(t.transportConnPayload, "--url"))
-                    yandexContainer.hint = getString(R.string.cups_url_hint)
                 }
             }
 
@@ -133,65 +167,28 @@ class AddTunFragment : BaseFragment() {
                 }
             }
 
-            debug = t.transportConnPayload.contains("--debug")
-            debugSwitch.isChecked = debug
             save.text = getString(R.string.save)
+        } ?: run {
+            toolbarTitle.text = getString(R.string.enter_manually)
+            updateTransportUi(TransportType.yandex)
         }
 
         transportLayout.setOnClickListener {
-            it.showTransportDropdown(
-                onYandex = {
-                    transport = TransportType.yandex
-                    maxContainer.isVisible = false
-                    yandexContainer.isVisible = true
-                    transportLabel.text = getString(R.string.yandex_docs_backend)
-                    yandexContainer.error = null
-                    maxTokenContainer.error = null
-                    maxUserIdContainer.error = null
-                },
-                onVyandex = {
-                    transport = TransportType.vyandex
-                    maxContainer.isVisible = false
-                    yandexContainer.isVisible = true
-                    transportLabel.text = getString(R.string.vyandex_backend)
-                    yandexContainer.error = null
-                    maxTokenContainer.error = null
-                    maxUserIdContainer.error = null
-                },
-                onMax = {
-                    transport = TransportType.max
-                    maxContainer.isVisible = true
-                    yandexContainer.isVisible = false
-                    transportLabel.text = getString(R.string.max_messenger_backend)
-                    yandexContainer.error = null
-                    maxTokenContainer.error = null
-                    maxUserIdContainer.error = null
-                },
-                onCups = {
-                    transport = TransportType.cups
-                    maxContainer.isVisible = false
-                    yandexContainer.isVisible = true
-                    transportLabel.text = getString(R.string.cups_backend)
-                    yandexContainer.hint = getString(R.string.cups_url_hint)
-                    yandexContainer.error = null
-                    maxTokenContainer.error = null
-                    maxUserIdContainer.error = null
-                },
-            )
-        }
-
-        debugSwitch.setOnCheckedChangeListener { _, checked ->
-            debug = checked
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
+            showTransportBottomSheet(transport) { selected ->
+                updateTransportUi(selected)
+            }
         }
 
         save.setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             val n = name.text?.toString()?.trim().orEmpty()
             if (n.isEmpty()) {
                 nameContainer.error = getString(R.string.name_required)
                 name.requestFocus()
                 return@setOnClickListener
             }
-            nameContainer.error = null
+            nameContainer.clearError()
 
             val url = docUrl.text?.toString()?.trim().orEmpty()
             val token = maxToken.text?.toString()?.trim().orEmpty()
@@ -199,8 +196,52 @@ class AddTunFragment : BaseFragment() {
 
             when (transport) {
                 TransportType.yandex, TransportType.vyandex -> {
-                    if (url.isEmpty()) {
+                    val urls = url.split(Regex("[,\\s\\n\\r]+")).map { it.trim() }.filter { it.isNotEmpty() }
+                    if (urls.isEmpty()) {
                         yandexContainer.error = getString(R.string.err_invalid_url)
+                        docUrl.requestFocus()
+                        return@setOnClickListener
+                    }
+                    for (u in urls) {
+                        if (!u.startsWith("http://", ignoreCase = true) && !u.startsWith("https://", ignoreCase = true)) {
+                            yandexContainer.error = getString(R.string.err_invalid_url)
+                            docUrl.requestFocus()
+                            return@setOnClickListener
+                        }
+                        val host = runCatching { java.net.URI(u).host }.getOrNull()?.lowercase()
+                        if (host.isNullOrEmpty() || !host.contains(".")) {
+                            yandexContainer.error = getString(R.string.err_invalid_url)
+                            docUrl.requestFocus()
+                            return@setOnClickListener
+                        }
+                        val isYandexDomain = host.contains("yandex.") || host.contains("yadi.sk") || host.contains("ya.ru")
+                        if (!isYandexDomain) {
+                            yandexContainer.error = getString(R.string.err_invalid_yandex_url)
+                            docUrl.requestFocus()
+                            return@setOnClickListener
+                        }
+                    }
+                    yandexContainer.clearError()
+                }
+                TransportType.max -> {
+                    if (token.isEmpty()) {
+                        maxTokenContainer.error = getString(R.string.err_max_token_required)
+                        maxToken.requestFocus()
+                        return@setOnClickListener
+                    }
+                    maxTokenContainer.clearError()
+
+                    val uidLong = uidStr.toLongOrNull()
+                    if (uidLong == null || uidLong <= 0) {
+                        maxUserIdContainer.error = getString(R.string.err_max_uid_required)
+                        maxUid.requestFocus()
+                        return@setOnClickListener
+                    }
+                    maxUserIdContainer.clearError()
+                }
+                TransportType.cups -> {
+                    if (url.isEmpty()) {
+                        yandexContainer.error = getString(R.string.err_cups_url_required)
                         docUrl.requestFocus()
                         return@setOnClickListener
                     }
@@ -215,37 +256,37 @@ class AddTunFragment : BaseFragment() {
                         docUrl.requestFocus()
                         return@setOnClickListener
                     }
-                    val isYandexDomain = host.contains("yandex.") || host.contains("yadi.sk") || host.contains("ya.ru")
-                    if (!isYandexDomain) {
-                        yandexContainer.error = getString(R.string.err_invalid_yandex_url)
+                    if (!host.contains("cups.online")) {
+                        yandexContainer.error = getString(R.string.err_cups_domain_invalid)
                         docUrl.requestFocus()
                         return@setOnClickListener
                     }
-                    yandexContainer.error = null
+                    yandexContainer.clearError()
                 }
-                TransportType.max -> {
-                    if (token.isEmpty()) {
-                        maxTokenContainer.error = getString(R.string.err_max_token_required)
-                        maxToken.requestFocus()
-                        return@setOnClickListener
-                    }
-                    maxTokenContainer.error = null
-
-                    val uid = uidStr.toLongOrNull()
-                    if (uid == null || uid <= 0) {
-                        maxUserIdContainer.error = getString(R.string.err_max_uid_required)
-                        maxUid.requestFocus()
-                        return@setOnClickListener
-                    }
-                    maxUserIdContainer.error = null
-                }
-                TransportType.cups -> {
+                TransportType.mailru -> {
                     if (url.isEmpty()) {
-                        yandexContainer.error = getString(R.string.cups_url_hint)
+                        yandexContainer.error = getString(R.string.err_mailru_url_required)
                         docUrl.requestFocus()
                         return@setOnClickListener
                     }
-                    yandexContainer.error = null
+                    if (!url.startsWith("http://", ignoreCase = true) && !url.startsWith("https://", ignoreCase = true)) {
+                        yandexContainer.error = getString(R.string.err_invalid_url)
+                        docUrl.requestFocus()
+                        return@setOnClickListener
+                    }
+                    val host = runCatching { java.net.URI(url).host }.getOrNull()?.lowercase()
+                    if (host.isNullOrEmpty() || !host.contains(".")) {
+                        yandexContainer.error = getString(R.string.err_invalid_url)
+                        docUrl.requestFocus()
+                        return@setOnClickListener
+                    }
+                    val isMailRuDomain = host.contains("mail.ru") || host.contains("my.mail.ru") || host.contains("cloud.mail.ru")
+                    if (!isMailRuDomain) {
+                        yandexContainer.error = getString(R.string.err_mailru_domain_invalid)
+                        docUrl.requestFocus()
+                        return@setOnClickListener
+                    }
+                    yandexContainer.clearError()
                 }
             }
 
@@ -255,10 +296,11 @@ class AddTunFragment : BaseFragment() {
                 encryptionKey.requestFocus()
                 return@setOnClickListener
             }
-            encryptionKeyContainer.error = null
+            encryptionKeyContainer.clearError()
 
+            val newId = editing?.id ?: System.currentTimeMillis()
             val newTunnel = createTunnel(
-                id = editing?.id ?: Random(System.currentTimeMillis()).nextLong(),
+                id = newId,
                 name = n,
                 docUrl = url,
                 maxToken = token,
@@ -276,11 +318,37 @@ class AddTunFragment : BaseFragment() {
 
             requireActivity().onBackPressedDispatcher.onBackPressed()
         }
+    }
 
-        if (editing == null) {
-            headerTitle.text = getString(R.string.enter_manually)
-            transportLabel.text = getString(R.string.yandex_docs_backend)
+    private fun showTransportBottomSheet(
+        current: TransportType,
+        onSelect: (TransportType) -> Unit
+    ) {
+        val dialog = BottomSheetDialog(requireContext())
+        val sheetView = layoutInflater.inflate(R.layout.bottom_sheet_transport_picker, null)
+        dialog.setContentView(sheetView)
+
+        sheetView.findViewById<View>(R.id.check_yandex)?.isVisible = current == TransportType.yandex
+        sheetView.findViewById<View>(R.id.check_vyandex)?.isVisible = current == TransportType.vyandex
+        sheetView.findViewById<View>(R.id.check_max)?.isVisible = current == TransportType.max
+        sheetView.findViewById<View>(R.id.check_cups)?.isVisible = current == TransportType.cups
+        sheetView.findViewById<View>(R.id.check_mailru)?.isVisible = current == TransportType.mailru
+
+        fun bindOption(viewId: Int, type: TransportType) {
+            sheetView.findViewById<View>(viewId)?.setOnClickListener {
+                it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
+                onSelect(type)
+                dialog.dismiss()
+            }
         }
+
+        bindOption(R.id.picker_yandex, TransportType.yandex)
+        bindOption(R.id.picker_vyandex, TransportType.vyandex)
+        bindOption(R.id.picker_max, TransportType.max)
+        bindOption(R.id.picker_cups, TransportType.cups)
+        bindOption(R.id.picker_mailru, TransportType.mailru)
+
+        dialog.show()
     }
 
     private fun argValue(payload: List<String>, key: String): String {
@@ -297,7 +365,7 @@ class AddTunFragment : BaseFragment() {
         encKey: String = "",
     ): Tunnel? {
         when (transport) {
-            TransportType.yandex, TransportType.vyandex, TransportType.cups -> {
+            TransportType.yandex, TransportType.vyandex, TransportType.cups, TransportType.mailru -> {
                 if (docUrl.isEmpty()) return null
             }
             TransportType.max -> {
@@ -307,54 +375,84 @@ class AddTunFragment : BaseFragment() {
 
         val keyFile = if (encKey.isNotEmpty()) {
             val f = File(requireContext().filesDir, "key_${id}.txt")
-            runCatching { f.writeText(encKey) }
+            runCatching {
+                requireContext().openFileOutput(f.name, android.content.Context.MODE_PRIVATE).use { fos ->
+                    fos.write(encKey.toByteArray(java.nio.charset.StandardCharsets.UTF_8))
+                    fos.flush()
+                    fos.fd.sync()
+                }
+                f.setReadable(true, true)
+                f.setWritable(true, true)
+            }
             f
-        } else null
+        } else {
+            val f = File(requireContext().filesDir, "key_${id}.txt")
+            runCatching { f.delete() }
+            null
+        }
 
         val payload = when (transport) {
             TransportType.yandex -> {
+                val urls = docUrl.split(Regex("[,\\s\\n\\r]+")).map { it.trim() }.filter { it.isNotEmpty() }
                 buildList {
-                    add("--client"); add("--transport"); add("yandex")
-                    add("--url"); add(docUrl)
+                    add("--role=client"); add("--transport"); add("yandex")
+                    if (urls.size > 1) {
+                        add("--urls"); add(urls.joinToString(","))
+                        add("--url"); add(urls.first())
+                    } else if (urls.size == 1) {
+                        add("--url"); add(urls.first())
+                    }
                     keyFile?.let {
                         add("--encryption-key-file")
                         add(it.absolutePath)
                     }
-                    if (debug) add("--debug")
                 }
             }
             TransportType.vyandex -> {
+                val urls = docUrl.split(Regex("[,\\s\\n\\r]+")).map { it.trim() }.filter { it.isNotEmpty() }
                 buildList {
-                    add("--client"); add("--transport"); add("vyandex")
-                    add("--url"); add(docUrl)
+                    add("--role=client"); add("--transport"); add("vyandex")
+                    if (urls.size > 1) {
+                        add("--urls"); add(urls.joinToString(","))
+                        add("--url"); add(urls.first())
+                    } else if (urls.size == 1) {
+                        add("--url"); add(urls.first())
+                    }
                     keyFile?.let {
                         add("--encryption-key-file")
                         add(it.absolutePath)
                     }
-                    if (debug) add("--debug")
                 }
             }
             TransportType.max -> {
                 buildList {
-                    add("--client"); add("--transport"); add("oneme")
+                    add("--role=client"); add("--transport"); add("oneme")
                     add("--maxToken"); add(maxToken)
                     add("--maxUid"); add(maxUid)
                     keyFile?.let {
                         add("--encryption-key-file")
                         add(it.absolutePath)
                     }
-                    if (debug) add("--debug")
                 }
             }
             TransportType.cups -> {
                 buildList {
-                    add("--client"); add("--transport"); add("cupsonline")
+                    add("--role=client"); add("--transport"); add("cupsonline")
                     add("--url"); add(docUrl)
                     keyFile?.let {
                         add("--encryption-key-file")
                         add(it.absolutePath)
                     }
-                    if (debug) add("--debug")
+                }
+            }
+            TransportType.mailru -> {
+                buildList {
+                    add("--role=client"); add("--transport"); add("mailru")
+                    add("--url"); add(docUrl)
+                    keyFile?.let {
+                        add("--encryption-key-file")
+                        add(it.absolutePath)
+                    }
                 }
             }
         }
@@ -363,46 +461,9 @@ class AddTunFragment : BaseFragment() {
             name = name,
             transportType = transport.name,
             transportConnPayload = payload,
-            encryptionKey = encKey.trim().ifEmpty { null },
+            encryptionKey = if (encKey.isEmpty()) "" else encKey,
         )
     }
 
     override fun onNewEvent(ev: AppEvent) = Unit
-
-    private fun View.showTransportDropdown(
-        onYandex: () -> Unit,
-        onVyandex: () -> Unit,
-        onMax: () -> Unit,
-        onCups: () -> Unit,
-    ) {
-        val popupView = LayoutInflater.from(context).inflate(R.layout.dropdown_transport_menu, null)
-        val popup = PopupWindow(
-            popupView,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            true
-        ).apply {
-            setBackgroundDrawable(ContextCompat.getDrawable(context, R.drawable.bg_dropdown_transports))
-            elevation = 8.dpToPx(context).toFloat()
-            animationStyle = R.style.DropdownAnimation
-            isOutsideTouchable = true
-            isFocusable = true
-        }
-
-        popupView.findViewById<View>(R.id.option_yandex)?.setOnClickListener {
-            onYandex(); popup.dismiss()
-        }
-        popupView.findViewById<View>(R.id.option_vyandex)?.setOnClickListener {
-            onVyandex(); popup.dismiss()
-        }
-        popupView.findViewById<View>(R.id.option_max)?.setOnClickListener {
-            onMax(); popup.dismiss()
-        }
-        popupView.findViewById<View>(R.id.option_cups)?.setOnClickListener {
-            onCups(); popup.dismiss()
-        }
-
-        popupView.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
-        popup.showAsDropDown(this, 0, -popupView.measuredHeight - height - 8.dpToPx(context))
-    }
 }

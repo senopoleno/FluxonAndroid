@@ -33,7 +33,7 @@
                 android:layout_height="24dp"
                 android:layout_gravity="center"
                 android:src="@drawable/ic_restore"
-                app:tint="@color/accent_blue"
+                app:tint="@color/m3_primary"
                 android:contentDescription="@null" />
 
         </FrameLayout>
@@ -105,7 +105,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/import_link_sheet_btn"
-            app:cornerRadius="10dp" />
+            app:cornerRadius="12dp" />
 
     </LinearLayout>
 

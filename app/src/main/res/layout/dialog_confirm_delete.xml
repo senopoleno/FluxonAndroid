@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -67,7 +67,7 @@
             android:textColor="@color/text_primary"
             android:textSize="14sp"
             android:fontFamily="sans-serif-medium"
-            app:strokeColor="@color/bg_card_stroke"
+            app:strokeColor="@color/m3_outline_variant"
             app:cornerRadius="12dp"
             android:insetTop="0dp"
             android:insetBottom="0dp" />
@@ -83,13 +83,13 @@
             android:layout_height="48dp"
             android:layout_weight="1"
             android:text="@string/action_delete"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/m3_on_error"
             android:textSize="14sp"
             android:fontFamily="sans-serif-medium"
-            app:backgroundTint="@color/state_error"
+            app:backgroundTint="@color/m3_error"
             app:icon="@drawable/ic_delete"
             app:iconSize="18dp"
-            app:iconTint="#FFFFFF"
+            app:iconTint="@color/m3_on_error"
             app:iconPadding="6dp"
             app:cornerRadius="12dp"
             android:insetTop="0dp"

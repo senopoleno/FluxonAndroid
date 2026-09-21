@@ -33,10 +33,10 @@
         android:layout_marginBottom="10dp"
         android:clickable="true"
         android:focusable="true"
-        app:cardBackgroundColor="@color/bg_card"
-        app:cardCornerRadius="12dp"
+        app:cardBackgroundColor="@color/m3_surface_container"
+        app:cardCornerRadius="16dp"
         app:cardElevation="0dp"
-        app:strokeColor="@color/bg_card_stroke"
+        app:strokeColor="@color/m3_outline_variant"
         app:strokeWidth="1dp">
 
         <LinearLayout
@@ -73,10 +73,10 @@
         android:layout_marginBottom="10dp"
         android:clickable="true"
         android:focusable="true"
-        app:cardBackgroundColor="@color/bg_card"
-        app:cardCornerRadius="12dp"
+        app:cardBackgroundColor="@color/m3_surface_container"
+        app:cardCornerRadius="16dp"
         app:cardElevation="0dp"
-        app:strokeColor="@color/bg_card_stroke"
+        app:strokeColor="@color/m3_outline_variant"
         app:strokeWidth="1dp">
 
         <LinearLayout
@@ -113,10 +113,10 @@
         android:layout_marginBottom="16dp"
         android:clickable="true"
         android:focusable="true"
-        app:cardBackgroundColor="@color/bg_card"
-        app:cardCornerRadius="12dp"
+        app:cardBackgroundColor="@color/m3_surface_container"
+        app:cardCornerRadius="16dp"
         app:cardElevation="0dp"
-        app:strokeColor="@color/bg_card_stroke"
+        app:strokeColor="@color/m3_outline_variant"
         app:strokeWidth="1dp">
 
         <LinearLayout

@@ -9,11 +9,17 @@ import kotlinx.serialization.json.Json
 import java.io.File
 import java.nio.charset.StandardCharsets
 
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.JsonArray
+
 object TunnelLinkParser {
 
     private const val TAG = "TunnelLinkParser"
     private const val SCHEME_OPENFLUX = "openflux"
     private const val SCHEME_FLUXON = "fluxon"
+    private const val SCHEME_PAPERFLUX = "paperflux"
     private const val HOST_IMPORT = "import"
     private const val PARAM_DATA = "data"
 
@@ -72,9 +78,26 @@ object TunnelLinkParser {
      * points to this local file.
      */
     fun ensureLocalKeyFile(context: Context, tunnel: Tunnel): Tunnel {
-        var key = tunnel.encryptionKey?.trim()
         val payload = tunnel.transportConnPayload.toMutableList()
         val keyIdx = payload.indexOf("--encryption-key-file")
+
+        // If encryptionKey is explicitly empty string, the user deliberately deleted the key.
+        if (tunnel.encryptionKey == "") {
+            val fallbackFile = File(context.filesDir, "key_${tunnel.id}.txt")
+            runCatching { fallbackFile.delete() }
+            if (keyIdx != -1) {
+                if (keyIdx + 1 < payload.size) {
+                    payload.removeAt(keyIdx + 1)
+                }
+                payload.removeAt(keyIdx)
+            }
+            return tunnel.copy(
+                encryptionKey = null,
+                transportConnPayload = payload
+            )
+        }
+
+        var key = tunnel.encryptionKey?.trim()
 
         if (key.isNullOrEmpty()) {
             // Check if local file exists from payload
@@ -85,7 +108,7 @@ object TunnelLinkParser {
                     key = runCatching { f.readText().trim() }.getOrNull()
                 }
             }
-            if (key.isNullOrEmpty()) {
+            if (key.isNullOrEmpty() && keyIdx != -1) {
                 val fallbackFile = File(context.filesDir, "key_${tunnel.id}.txt")
                 if (fallbackFile.exists()) {
                     key = runCatching { fallbackFile.readText().trim() }.getOrNull()
@@ -94,12 +117,32 @@ object TunnelLinkParser {
         }
 
         if (key.isNullOrEmpty()) {
-            return tunnel
+            val fallbackFile = File(context.filesDir, "key_${tunnel.id}.txt")
+            runCatching { fallbackFile.delete() }
+            if (keyIdx != -1) {
+                if (keyIdx + 1 < payload.size) {
+                    payload.removeAt(keyIdx + 1)
+                }
+                payload.removeAt(keyIdx)
+            }
+            return tunnel.copy(
+                encryptionKey = null,
+                transportConnPayload = payload
+            )
         }
 
-        // Write to local filesDir
+        // Write to local filesDir with fsync to guarantee persistence before native process starts
         val localKeyFile = File(context.filesDir, "key_${tunnel.id}.txt")
-        val writeOk = runCatching { localKeyFile.writeText(key) }.isSuccess
+        val writeOk = runCatching {
+            // MODE_PRIVATE guarantees 0600 Linux permissions in app private storage
+            context.openFileOutput(localKeyFile.name, Context.MODE_PRIVATE).use { fos ->
+                fos.write(key.toByteArray(StandardCharsets.UTF_8))
+                fos.flush()
+                fos.fd.sync()
+            }
+            localKeyFile.setReadable(true, true)
+            localKeyFile.setWritable(true, true)
+        }.isSuccess
         if (!writeOk) {
             Logx.w(TAG, "Failed to write local key file: ${localKeyFile.absolutePath}")
         }
@@ -117,6 +160,75 @@ object TunnelLinkParser {
         )
     }
 
+    fun decodeTunnelFromJson(jsonStr: String): Tunnel? {
+        val direct = runCatching { json.decodeFromString<Tunnel>(jsonStr) }.getOrNull()
+        if (direct != null) return direct
+
+        // Flexible JSON decoder for PaperFlux and generic OpenFlux JSON configs
+        return runCatching {
+            val el = json.parseToJsonElement(jsonStr).jsonObject
+            val name = el["name"]?.jsonPrimitive?.contentOrNull
+                ?: el["title"]?.jsonPrimitive?.contentOrNull
+                ?: "Imported Tunnel"
+            val transportRaw = el["transport"]?.jsonPrimitive?.contentOrNull
+                ?: el["transportType"]?.jsonPrimitive?.contentOrNull
+                ?: "yandex"
+            val transType = io.github.p1neapplexpress.openflux.data.TransportType.from(transportRaw)
+
+            val urlsList = mutableListOf<String>()
+            val urlsEl = el["urls"]
+            if (urlsEl != null) {
+                if (urlsEl is JsonArray) {
+                    urlsList.addAll(urlsEl.mapNotNull { it.jsonPrimitive.contentOrNull })
+                } else {
+                    val rawStr = urlsEl.jsonPrimitive.contentOrNull.orEmpty()
+                    urlsList.addAll(rawStr.split(",").map { it.trim() }.filter { it.isNotEmpty() })
+                }
+            }
+            val singleUrl = el["url"]?.jsonPrimitive?.contentOrNull.orEmpty()
+            if (singleUrl.isNotEmpty() && !urlsList.contains(singleUrl)) {
+                urlsList.add(0, singleUrl)
+            }
+
+            val key = el["key"]?.jsonPrimitive?.contentOrNull
+                ?: el["encryptionKey"]?.jsonPrimitive?.contentOrNull
+                ?: el["secret"]?.jsonPrimitive?.contentOrNull
+            val token = el["maxToken"]?.jsonPrimitive?.contentOrNull
+                ?: el["token"]?.jsonPrimitive?.contentOrNull
+            val uid = el["maxUid"]?.jsonPrimitive?.contentOrNull
+                ?: el["uid"]?.jsonPrimitive?.contentOrNull
+
+            val payload = buildList {
+                add("--role=client")
+                add("--transport")
+                add(transType.cliName)
+                if (urlsList.size > 1) {
+                    add("--urls")
+                    add(urlsList.joinToString(","))
+                    add("--url")
+                    add(urlsList.first())
+                } else if (urlsList.size == 1) {
+                    add("--url")
+                    add(urlsList.first())
+                }
+                if (!token.isNullOrEmpty()) {
+                    add("--maxToken"); add(token)
+                }
+                if (!uid.isNullOrEmpty()) {
+                    add("--maxUid"); add(uid)
+                }
+            }
+
+            Tunnel(
+                id = System.currentTimeMillis() * 1000L + kotlin.random.Random.nextLong(1000L),
+                name = name,
+                transportType = transType.name,
+                transportConnPayload = payload,
+                encryptionKey = key
+            )
+        }.getOrNull()
+    }
+
     fun parse(input: String?, context: Context? = null): Tunnel? {
         if (input.isNullOrBlank()) return null
         val trimmed = input.trim()
@@ -125,6 +237,7 @@ object TunnelLinkParser {
 
         if (trimmed.startsWith("$SCHEME_OPENFLUX:", ignoreCase = true) ||
             trimmed.startsWith("$SCHEME_FLUXON:", ignoreCase = true) ||
+            trimmed.startsWith("$SCHEME_PAPERFLUX:", ignoreCase = true) ||
             trimmed.contains("://$HOST_IMPORT", ignoreCase = true)
         ) {
             val uri = runCatching { Uri.parse(trimmed) }.getOrNull()
@@ -135,18 +248,18 @@ object TunnelLinkParser {
         }
 
         if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-            tunnel = runCatching { json.decodeFromString<Tunnel>(trimmed) }.getOrNull()
+            tunnel = decodeTunnelFromJson(trimmed)
         }
 
         if (tunnel == null) {
             decodeBase64(trimmed)?.let { jsonStr ->
-                tunnel = runCatching { json.decodeFromString<Tunnel>(jsonStr) }.getOrNull()
+                tunnel = decodeTunnelFromJson(jsonStr)
             }
         }
 
         // Smart parser: CLI arguments or raw URLs
         if (tunnel == null) {
-            if (trimmed.contains("--transport") || trimmed.contains("--url")) {
+            if (trimmed.contains("--transport") || trimmed.contains("--url") || trimmed.contains("--urls")) {
                 val tokens = trimmed.split(Regex("\\s+"))
                 fun getArg(name: String): String? {
                     val idx = tokens.indexOf(name)
@@ -154,43 +267,60 @@ object TunnelLinkParser {
                 }
                 val rawTransport = getArg("--transport") ?: "yandex"
                 val transType = io.github.p1neapplexpress.openflux.data.TransportType.from(rawTransport)
-                val url = getArg("--url").orEmpty()
+                val rawUrls = getArg("--urls").orEmpty()
+                val rawUrl = getArg("--url").orEmpty()
                 val token = getArg("--maxToken").orEmpty()
                 val uid = getArg("--maxUid").orEmpty()
                 val key = getArg("--encryption-key-file").orEmpty()
-                val isDebug = tokens.contains("--debug")
 
                 val payload = buildList {
-                    add("--client")
+                    add("--role=client")
                     add("--transport")
-                    add(if (transType == io.github.p1neapplexpress.openflux.data.TransportType.cups) "cupsonline" else if (transType == io.github.p1neapplexpress.openflux.data.TransportType.max) "oneme" else transType.name)
-                    if (url.isNotEmpty()) { add("--url"); add(url) }
+                    add(transType.cliName)
+                    if (rawUrls.isNotEmpty()) {
+                        add("--urls"); add(rawUrls)
+                        val firstUrl = rawUrls.split(",").firstOrNull()?.trim().orEmpty()
+                        if (firstUrl.isNotEmpty()) {
+                            add("--url"); add(firstUrl)
+                        }
+                    } else if (rawUrl.isNotEmpty()) {
+                        add("--url"); add(rawUrl)
+                    }
                     if (token.isNotEmpty()) { add("--maxToken"); add(token) }
                     if (uid.isNotEmpty()) { add("--maxUid"); add(uid) }
-                    if (isDebug) add("--debug")
                 }
                 tunnel = Tunnel(
-                    id = System.currentTimeMillis(),
+                    id = System.currentTimeMillis() * 1000L + kotlin.random.Random.nextLong(1000L),
                     name = when (transType) {
                         io.github.p1neapplexpress.openflux.data.TransportType.cups -> "CUPS Tunnel"
                         io.github.p1neapplexpress.openflux.data.TransportType.max -> "MAX Tunnel"
                         io.github.p1neapplexpress.openflux.data.TransportType.vyandex -> "Yandex Volga"
+                        io.github.p1neapplexpress.openflux.data.TransportType.mailru -> "Mail.ru Docs"
                         else -> "Yandex Docs"
                     },
                     transportType = transType.name,
                     transportConnPayload = payload,
-                    encryptionKey = null
+                    encryptionKey = if (key.isNotEmpty()) runCatching { File(key).readText().trim() }.getOrNull() else null
                 )
             } else if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {
                 val isCups = trimmed.contains("cups.online", ignoreCase = true)
-                val transType = if (isCups) io.github.p1neapplexpress.openflux.data.TransportType.cups else io.github.p1neapplexpress.openflux.data.TransportType.yandex
+                val isMailRu = trimmed.contains("mail.ru", ignoreCase = true)
+                val transType = when {
+                    isCups -> io.github.p1neapplexpress.openflux.data.TransportType.cups
+                    isMailRu -> io.github.p1neapplexpress.openflux.data.TransportType.mailru
+                    else -> io.github.p1neapplexpress.openflux.data.TransportType.yandex
+                }
                 tunnel = Tunnel(
-                    id = System.currentTimeMillis(),
-                    name = if (isCups) "CUPS Tunnel" else "Yandex Docs",
+                    id = System.currentTimeMillis() * 1000L + kotlin.random.Random.nextLong(1000L),
+                    name = when (transType) {
+                        io.github.p1neapplexpress.openflux.data.TransportType.cups -> "CUPS Tunnel"
+                        io.github.p1neapplexpress.openflux.data.TransportType.mailru -> "Mail.ru Docs"
+                        else -> "Yandex Docs"
+                    },
                     transportType = transType.name,
                     transportConnPayload = listOf(
-                        "--client",
-                        "--transport", if (isCups) "cupsonline" else "yandex",
+                        "--role=client",
+                        "--transport", transType.cliName,
                         "--url", trimmed
                     ),
                     encryptionKey = null
@@ -206,9 +336,10 @@ object TunnelLinkParser {
     }
 
     fun fromUri(uri: Uri, context: Context? = null): Tunnel? {
-        val scheme = uri.scheme
-        if (!scheme.equals(SCHEME_OPENFLUX, ignoreCase = true) &&
-            !scheme.equals(SCHEME_FLUXON, ignoreCase = true)
+        val scheme = uri.scheme?.lowercase()
+        if (scheme != SCHEME_OPENFLUX &&
+            scheme != SCHEME_FLUXON &&
+            scheme != SCHEME_PAPERFLUX
         ) {
             return null
         }
@@ -217,16 +348,27 @@ object TunnelLinkParser {
 
         val dataParam = uri.getQueryParameter(PARAM_DATA)
             ?: uri.getQueryParameter("config")
+            ?: uri.getQueryParameter("c")
+            ?: uri.getQueryParameter("tunnel")
         if (!dataParam.isNullOrBlank()) {
             decodeBase64(dataParam)?.let { jsonStr ->
-                tunnel = runCatching { json.decodeFromString<Tunnel>(jsonStr) }.getOrNull()
+                tunnel = decodeTunnelFromJson(jsonStr)
+            }
+        }
+
+        if (tunnel == null) {
+            val fragment = uri.fragment
+            if (!fragment.isNullOrBlank()) {
+                decodeBase64(fragment)?.let { jsonStr ->
+                    tunnel = decodeTunnelFromJson(jsonStr)
+                }
             }
         }
 
         if (tunnel == null) {
             for (segment in uri.pathSegments.reversed()) {
                 decodeBase64(segment)?.let { jsonStr ->
-                    tunnel = runCatching { json.decodeFromString<Tunnel>(jsonStr) }.getOrNull()
+                    tunnel = decodeTunnelFromJson(jsonStr)
                     if (tunnel != null) break
                 }
             }
@@ -239,8 +381,49 @@ object TunnelLinkParser {
                 !host.equals("config", ignoreCase = true)
             ) {
                 decodeBase64(host)?.let { jsonStr ->
-                    tunnel = runCatching { json.decodeFromString<Tunnel>(jsonStr) }.getOrNull()
+                    tunnel = decodeTunnelFromJson(jsonStr)
                 }
+            }
+        }
+
+        // Direct query parameter construction (e.g. paperflux://import?transport=yandex&urls=...&key=...)
+        if (tunnel == null) {
+            val rawUrls = uri.getQueryParameter("urls")
+            val rawUrl = uri.getQueryParameter("url")
+            if (!rawUrls.isNullOrBlank() || !rawUrl.isNullOrBlank()) {
+                val rawTransport = uri.getQueryParameter("transport")
+                    ?: uri.host?.takeIf { it != HOST_IMPORT && it != "config" }
+                    ?: "yandex"
+                val transType = io.github.p1neapplexpress.openflux.data.TransportType.from(rawTransport)
+                val key = uri.getQueryParameter("key") ?: uri.getQueryParameter("secret")
+                val name = uri.getQueryParameter("name") ?: when (transType) {
+                    io.github.p1neapplexpress.openflux.data.TransportType.cups -> "CUPS Tunnel"
+                    io.github.p1neapplexpress.openflux.data.TransportType.max -> "MAX Tunnel"
+                    io.github.p1neapplexpress.openflux.data.TransportType.vyandex -> "Yandex Volga"
+                    io.github.p1neapplexpress.openflux.data.TransportType.mailru -> "Mail.ru Docs"
+                    else -> "Yandex Docs"
+                }
+                val payload = buildList {
+                    add("--role=client")
+                    add("--transport")
+                    add(transType.cliName)
+                    if (!rawUrls.isNullOrBlank()) {
+                        add("--urls"); add(rawUrls)
+                        val firstUrl = rawUrls.split(",").firstOrNull()?.trim().orEmpty()
+                        if (firstUrl.isNotEmpty()) {
+                            add("--url"); add(firstUrl)
+                        }
+                    } else if (!rawUrl.isNullOrBlank()) {
+                        add("--url"); add(rawUrl)
+                    }
+                }
+                tunnel = Tunnel(
+                    id = System.currentTimeMillis() * 1000L + kotlin.random.Random.nextLong(1000L),
+                    name = name,
+                    transportType = transType.name,
+                    transportConnPayload = payload,
+                    encryptionKey = key
+                )
             }
         }
 

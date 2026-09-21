@@ -9,23 +9,29 @@
 
     <string name="prof_default">Default</string>
 
-    <string name="yandex_docs_backend">Yandex.Docs backend</string>
-    <string name="vyandex_backend">Yandex.Docs backend (Volga)</string>
-    <string name="max_messenger_backend">MAX Messenger backend</string>
-    <string name="cups_backend">CUPS (Cups.online) backend</string>
+    <string name="yandex_docs_backend">Yandex.Docs</string>
+    <string name="vyandex_backend">Yandex.Docs (Volga)</string>
+    <string name="max_messenger_backend">MAX Messenger</string>
+    <string name="cups_backend">CUPS</string>
     <string name="cups_url_hint">Base64 room list or URL</string>
+    <string name="mailru_backend">Mail.ru Docs</string>
+    <string name="mailru_url_hint">Document URL</string>
 
     <string name="starting_transport">Starting transport…</string>
     <string name="starting_tsocks">Starting tun2socks…</string>
     <string name="connecting">Connecting…</string>
+    <string name="reconnecting">Reconnecting…</string>
+    <string name="waiting_for_network">Waiting for network…</string>
     <string name="running">Running</string>
     <string name="stopped">Stopped</string>
+    <string name="view_logs">View Logs</string>
+    <string name="retry">Retry</string>
 
     <string name="vpn_permission_required">Please grant VPN permission to establish connection</string>
     <string name="qr_scan_failed">Failed to scan QR code</string>
     <string name="name_required">Enter a tunnel name</string>
 
-    <string name="add_tunnel">Add tunnel</string>
+    <string name="add_tunnel">Add</string>
     <string name="scan_qr">Scan QR</string>
     <string name="enter_manually">Enter manually</string>
     <string name="save">Save</string>
@@ -46,6 +52,9 @@
     <string name="no_tunnel">No tunnel</string>
     <string name="uptime_label">Connected for</string>
     <string name="select_config">Configurations</string>
+    <string name="search_configs_hint">Search configuration…</string>
+    <string name="total_configs_format">Total configurations: %d</string>
+    <string name="status_connected_badge">Connected</string>
     <string name="no_configs">No configurations</string>
     <string name="action_edit">Edit</string>
     <string name="action_delete">Delete</string>
@@ -118,7 +127,7 @@
 
     <!-- Encryption Key -->
     <string name="encryption_key">Encryption key</string>
-    <string name="encryption_key_helper">min. 16 characters, optional</string>
+    <string name="encryption_key_helper">Min. 16 characters, optional</string>
 
     <!-- Link Import and Deep Links -->
     <string name="import_from_link">Import via link</string>
@@ -128,6 +137,8 @@
     <string name="import_link_dialog_btn">Import</string>
     <string name="import_link_invalid">Invalid link or configuration format</string>
     <string name="config_link_copied">Configuration link copied</string>
+    <string name="add_manual_desc">Configure transport parameters manually</string>
+    <string name="logs_lines_count">%d lines</string>
     <string name="import_confirm_title">Import Configuration</string>
     <string name="import_confirm_message">Add configuration \"%s\"?</string>
     <string name="btn_add_and_connect">Add &amp; Connect</string>
@@ -138,6 +149,11 @@
     <string name="err_invalid_yandex_url">URL must be a valid Yandex Disk / Docs link</string>
     <string name="err_max_token_required">MAX token is required</string>
     <string name="err_max_uid_required">MAX user ID must be a valid positive number</string>
+    <string name="err_cups_url_required">Cups.online URL is required</string>
+    <string name="err_cups_domain_invalid">URL must be a valid cups.online link</string>
+    <string name="err_mailru_url_required">Mail.ru document URL is required</string>
+    <string name="err_mailru_domain_invalid">URL must be a valid mail.ru link</string>
+
 
     <!-- App Update -->
     <string name="update_available_title">Update Available</string>
@@ -155,7 +171,7 @@
     <string name="debug_check_update_title">Check for updates now</string>
     <string name="debug_check_update_desc">Force GitHub API check without waiting 24h</string>
     <string name="debug_test_update_title">Test update notification</string>
-    <string name="debug_test_update_desc">Open new version v1.1.0 dialog with changelog</string>
+    <string name="debug_test_update_desc">Open new version v1.2.0 dialog with changelog</string>
     <string name="debug_reset_timer_title">Reset check timer (24h)</string>
     <string name="debug_reset_timer_desc">Clear last update check timestamp in preferences</string>
     <string name="debug_generate_logs_title">Generate test logs</string>
@@ -172,13 +188,13 @@
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
-    <string name="settings_section_appearance">Appearance</string>
+    <string name="settings_section_appearance">Styling</string>
     <string name="settings_theme_title">Theme</string>
     <string name="settings_theme_system">Auto</string>
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_theme_light">Light</string>
 
-    <string name="settings_section_network">Network &amp; Tunnel</string>
+    <string name="settings_section_network">Network &amp; Security</string>
     <string name="settings_split_tunnel_title">Split Tunneling</string>
     <string name="settings_split_tunnel_bypass">Bypass (%1$d apps)</string>
     <string name="settings_split_tunnel_proxy">Proxy (%1$d apps)</string>
@@ -191,6 +207,7 @@
     <string name="settings_dns_google">Google</string>
     <string name="settings_dns_adguard">AdGuard DNS</string>
     <string name="settings_dns_quad9">Quad9</string>
+    <string name="settings_dns_xbox">Xbox DNS</string>
     <string name="settings_dns_custom">Custom DNS</string>
     <string name="settings_dns_custom_primary_hint">Primary DNS (e.g. 1.1.1.1)</string>
     <string name="settings_dns_custom_secondary_hint">Secondary DNS (e.g. 8.8.8.8)</string>
@@ -201,13 +218,16 @@
     <string name="settings_ipv6_summary">Route IPv6 traffic through tunnel</string>
 
     <!-- Automation -->
-    <string name="settings_section_automation">Automation &amp; Reliability</string>
+    <string name="settings_section_automation">Automation &amp; Sharing</string>
     <string name="settings_failover_title">Failover (Auto-switch on error)</string>
     <string name="settings_failover_summary">Switch to next available server if connection drops</string>
     <string name="settings_boot_title">Auto-connect on Boot</string>
     <string name="settings_boot_summary">Start VPN automatically after device reboot</string>
     <string name="settings_autoclear_logs_title">Auto-cleanup Event Log</string>
     <string name="settings_autoclear_logs_summary">Purge event log records older than 24 hours</string>
+    <string name="settings_battery_opt_title">Unrestricted Background</string>
+    <string name="settings_battery_opt_desc_enabled">Unrestricted (battery optimization ignored)</string>
+    <string name="settings_battery_opt_desc_disabled">Optimized by OS (may disconnect in sleep; tap to exempt)</string>
 
     <!-- DNS Menu -->
     <string name="dns_menu_title">DNS Settings</string>
@@ -257,13 +277,13 @@
     <string name="settings_backup_error">Backup error: %1$s</string>
 
     <string name="settings_section_updates">Updates</string>
-    <string name="settings_auto_update_title">Check updates every 24 hours</string>
+    <string name="settings_auto_update_title">Auto-check updates</string>
     <string name="settings_auto_update_summary">Periodically check GitHub for new releases</string>
     <string name="settings_check_update_now">Check for updates now</string>
     <string name="settings_checking_updates">Checking for updates…</string>
     <string name="settings_no_updates">You are using the latest version</string>
 
-    <string name="settings_section_about">About</string>
+    <string name="settings_section_about">About &amp; Updates</string>
     <string name="settings_app_version">Version %1$s (build %2$d)</string>
     <string name="settings_github_title">Source code on GitHub</string>
     <string name="settings_github_summary">senopoleno/FluxonAndroid</string>
@@ -331,10 +351,10 @@
     <string name="import_link_sheet_btn">Import</string>
 
     <string name="settings_bypass_lan_title">Bypass LAN</string>
-    <string name="settings_bypass_lan_desc">Direct access to local devices (routers, printers, IoT) bypassing VPN</string>
+    <string name="settings_bypass_lan_desc">Direct access to local devices</string>
 
-    <string name="settings_kill_switch_title">Block traffic without VPN</string>
-    <string name="settings_kill_switch_desc">Block all network traffic if VPN is not connected (Kill Switch)</string>
+    <string name="settings_kill_switch_title">Kill Switch</string>
+    <string name="settings_kill_switch_desc">Block traffic when VPN drops</string>
     <string name="settings_kill_switch_system">System Always-on VPN</string>
 
     <string name="settings_hotspot_title">Share Proxy / Hotspot</string>
@@ -378,7 +398,7 @@
     <string name="settings_auto_boot_title">Auto-connect on Boot</string>
     <string name="settings_auto_boot_desc">Start VPN automatically after device reboot</string>
     <string name="settings_failover_desc">Switch to next available server if connection drops</string>
-    <string name="settings_section_logs">Backup &amp; Logs</string>
+    <string name="settings_section_logs">Logs &amp; Diagnostics</string>
     <string name="settings_export_backup_desc">Save tunnels and rules to JSON file</string>
     <string name="settings_import_backup_desc">Restore configurations from JSON file</string>
     <string name="settings_auto_clear_logs_title">Auto-cleanup Event Log</string>
@@ -388,4 +408,74 @@
     <string name="notify_ping_format">Ping: %1$d ms</string>
     <string name="notify_ping_testing">Checking ping…</string>
     <string name="notify_ping_timeout">Ping: timeout</string>
+    <string name="share_logs_title">Share Event Log</string>
+    <string name="share_logs_as_file">Share (.txt file)</string>
+    <string name="share_logs_copy_text">Copy text</string>
+    <string name="share_logs_empty">Event log is empty</string>
+    <string name="share_logs_chooser_title">Send log file</string>
+
+    <!-- Event Logs & Log Levels -->
+    <string name="settings_event_logs_title">Event Log</string>
+    <string name="settings_event_logs_desc">View diagnostic messages and error traces</string>
+    <string name="log_level">Log Level</string>
+    <string name="log_level_debug">DEBUG</string>
+    <string name="log_level_info">INFO</string>
+    <string name="log_level_warn">WARN</string>
+    <string name="log_level_error">ERROR</string>
+    <string name="log_cat_all">All</string>
+    <string name="log_cat_error">Errors</string>
+    <string name="log_cat_warn">Warnings</string>
+    <string name="log_cat_info">Info</string>
+    <string name="log_cat_debug">Debug</string>
+    <string name="connection_log_level">Connection Log Level</string>
+    <string name="connection_log_level_changed">Connection log level set to %1$s</string>
+    <string name="action_more">More options</string>
+    <string name="autoscroll_enabled">Auto-scroll enabled</string>
+    <string name="autoscroll_disabled">Auto-scroll disabled</string>
+    <string name="logs_cleared">Logs cleared</string>
+    <string name="log_level_debug_sub">Verbose</string>
+    <string name="log_level_info_sub">Standard</string>
+    <string name="log_level_warn_sub">Warnings only</string>
+    <string name="log_level_error_sub">Errors only</string>
+
+    <string name="settings_appearance_button_title">Appearance</string>
+    <string name="settings_appearance_elements_title">Appearance</string>
+    <string name="settings_appearance_elements_desc">Speed graph, notifications, ping and memory</string>
+    <string name="settings_speed_graph_title">Speed Graph</string>
+    <string name="settings_speed_graph_desc">Display traffic sparkline beneath connect button</string>
+    <string name="done">Done</string>
+    <string name="error_open_browser">Unable to open browser</string>
+    <string name="share_logs_error">Failed to export logs: %1$s</string>
+    <string name="qr_generate_error">Failed to generate QR code</string>
+    <string name="qr_save_error">Error saving QR code: %1$s</string>
+    <string name="settings_haptic_title">Haptic Feedback</string>
+    <string name="settings_haptic_desc">Tactile vibration feedback when interacting with controls</string>
+    <string name="settings_language_title">App Language</string>
+    <string name="settings_language_choose">Select interface language</string>
+    <string name="settings_language_system">System Default</string>
+    <string name="settings_language_ru">Русский</string>
+    <string name="settings_language_en">English</string>
+    <string name="settings_language_system_desc">Follows system language</string>
+    <string name="settings_language_ru_desc">Russian interface language</string>
+    <string name="settings_language_en_desc">English interface language</string>
+    <string name="settings_icon_title">App Icon</string>
+    <string name="settings_icon_choose">Select desktop icon style</string>
+    <string name="settings_icon_dark">Dark</string>
+    <string name="settings_icon_light">Light</string>
+    <string name="settings_icon_dark_desc">Dark theme style with azure accents</string>
+    <string name="settings_icon_light_desc">Blue theme style with light accents</string>
+    <string name="settings_section_display">Display</string>
+    <string name="settings_section_personalization">Personalization</string>
+    <string name="battery_opt_prompt_title">Background Operation</string>
+    <string name="battery_opt_prompt_message">To prevent VPN disconnects when the screen is locked, it is recommended to disable battery optimization for Fluxon.</string>
+    <string name="battery_opt_prompt_action">Configure</string>
+    <string name="battery_opt_prompt_later">Later</string>
+    <string name="battery_opt_disabled">Unrestricted (background active)</string>
+    <string name="battery_opt_enabled">Optimized (tap to disable)</string>
+    <string name="settings_proxy_only_title">Proxy-only mode</string>
+    <string name="settings_proxy_only_desc">Run SOCKS5 proxy without VPN service and status bar key icon</string>
+    <string name="manual_section_general">General</string>
+    <string name="manual_section_transport">Transport Configuration</string>
+    <string name="manual_section_security">Security</string>
+    <string name="manual_url_helper">Multiple URLs separated by comma or newline for multi-lane failover</string>
 </resources>

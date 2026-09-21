@@ -152,4 +152,26 @@ class DomainRulesPreferences(context: Context) {
     fun clearAll() {
         domains = emptySet()
     }
+
+    fun hasActiveRules(): Boolean = domains.isNotEmpty()
+
+    fun getModeString(): String = if (mode == MODE_PROXY) "proxy" else "bypass"
+
+    fun getRulesFilePath(context: Context): String =
+        java.io.File(context.filesDir, "domain_rules.txt").absolutePath
+
+    fun writeRulesFile(context: Context): java.io.File {
+        val file = java.io.File(context.filesDir, "domain_rules.txt")
+        val activeList = domains
+        file.bufferedWriter().use { writer ->
+            for (d in activeList) {
+                val clean = d.trim().lowercase()
+                if (clean.isNotEmpty()) {
+                    writer.write(clean)
+                    writer.newLine()
+                }
+            }
+        }
+        return file
+    }
 }

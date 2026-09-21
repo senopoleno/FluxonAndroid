@@ -8,98 +8,105 @@
     android:background="@drawable/bg_screen_ambient">
 
     <!-- Top Action Bar -->
-    <LinearLayout
+    <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/logs_top_bar"
         android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingHorizontal="16dp">
+        android:layout_height="wrap_content"
+        android:minHeight="?attr/actionBarSize"
+        app:navigationIcon="@drawable/ic_arrow_back"
+        app:navigationIconTint="@color/text_primary"
+        app:navigationContentDescription="@string/cancel"
+        app:contentInsetStartWithNavigation="0dp">
 
-        <TextView
-            android:id="@+id/tv_logs_title"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/logs_title"
-            android:textColor="@color/text_primary"
-            android:textSize="18sp"
-            android:fontFamily="sans-serif-medium"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:clickable="true"
-            android:focusable="true" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingEnd="12dp">
 
-        <TextView
-            android:id="@+id/tv_line_count"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:background="@drawable/bg_config_selector"
-            android:paddingHorizontal="8dp"
-            android:paddingVertical="3dp"
-            android:textColor="@color/text_secondary"
-            android:textSize="11sp"
-            android:fontFamily="monospace"
-            tools:text="0 строк" />
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
 
-        <View
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" />
+                <TextView
+                    android:id="@+id/tv_logs_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/logs_title"
+                    android:textColor="@color/text_primary"
+                    android:textSize="18sp"
+                    android:fontFamily="sans-serif-bold" />
 
-        <!-- Auto-scroll toggle button -->
-        <ImageView
-            android:id="@+id/btn_autoscroll"
-            android:layout_width="38dp"
-            android:layout_height="38dp"
-            android:padding="8dp"
-            android:layout_marginEnd="6dp"
-            android:src="@drawable/ic_refresh"
-            android:background="@drawable/bg_config_selector"
-            android:clickable="true"
-            android:focusable="true"
-            android:contentDescription="@string/auto_scroll"
-            app:tint="@color/state_running" />
+                <TextView
+                    android:id="@+id/tv_line_count"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="1dp"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    android:fontFamily="sans-serif"
+                    android:visibility="gone"
+                    tools:visibility="visible"
+                    tools:text="0 строк" />
 
-        <!-- Copy button -->
-        <ImageView
-            android:id="@+id/btn_copy"
-            android:layout_width="38dp"
-            android:layout_height="38dp"
-            android:padding="8dp"
-            android:layout_marginEnd="6dp"
-            android:src="@drawable/ic_content_copy"
-            android:background="@drawable/bg_config_selector"
-            android:clickable="true"
-            android:focusable="true"
-            android:contentDescription="@string/copy"
-            app:tint="@color/text_primary" />
+            </LinearLayout>
 
-        <!-- Clear button -->
-        <ImageView
-            android:id="@+id/btn_clear"
-            android:layout_width="38dp"
-            android:layout_height="38dp"
-            android:padding="8dp"
-            android:src="@drawable/ic_delete"
-            android:background="@drawable/bg_config_selector"
-            android:clickable="true"
-            android:focusable="true"
-            android:contentDescription="@string/clear"
-            app:tint="@color/state_error" />
+            <!-- Connection Log Level Selector -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_connection_log_level"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="0dp"
+                android:textSize="12sp"
+                android:fontFamily="sans-serif-medium"
+                android:textColor="@color/text_primary"
+                app:backgroundTint="@color/m3_surface_container_high"
+                app:cornerRadius="10dp"
+                app:icon="@drawable/ic_chevron_down"
+                app:iconGravity="textEnd"
+                app:iconSize="14dp"
+                app:iconTint="@color/text_secondary"
+                android:layout_marginEnd="8dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                tools:text="INFO" />
 
-    </LinearLayout>
+            <!-- More Options (3 dots) -->
+            <ImageView
+                android:id="@+id/btn_logs_more"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:padding="8dp"
+                android:src="@drawable/ic_more_vert"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="@string/action_more"
+                app:tint="@color/text_primary" />
+
+        </LinearLayout>
+
+    </com.google.android.material.appbar.MaterialToolbar>
 
     <!-- Terminal Console Window Card -->
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:layout_marginHorizontal="12dp"
-        android:layout_marginBottom="14dp"
-        app:cardBackgroundColor="@color/bg_card"
-        app:cardCornerRadius="16dp"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="16dp"
+        app:cardBackgroundColor="@color/m3_surface_container_lowest"
+        app:cardCornerRadius="20dp"
         app:cardElevation="0dp"
-        app:strokeColor="@color/bg_card_stroke"
+        app:strokeColor="@color/m3_outline_variant"
         app:strokeWidth="1dp">
 
         <ScrollView
@@ -115,10 +122,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:fontFamily="monospace"
-                android:lineSpacingExtra="2.5dp"
-                android:padding="14dp"
-                android:textColor="@color/text_primary"
-                android:textSize="11.5sp"
+                android:lineSpacingExtra="3dp"
+                android:padding="16dp"
+                android:textColor="@color/m3_on_surface"
+                android:textSize="12sp"
                 android:textIsSelectable="true" />
 
         </ScrollView>

@@ -17,6 +17,12 @@ import io.github.p1neapplexpress.openflux.IUnifiedService
 import io.github.p1neapplexpress.openflux.event.AppEvent
 import io.github.p1neapplexpress.openflux.event.EventBus
 import io.github.p1neapplexpress.openflux.NativeBridge
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import android.os.Build
 import io.github.p1neapplexpress.openflux.util.Constants
 import io.github.p1neapplexpress.openflux.util.LocalSocksSession
 import io.github.p1neapplexpress.openflux.util.Logx
@@ -28,6 +34,9 @@ class SocksVpnService : android.net.VpnService() {
         const val TAG = "SocksVpnService"
         const val ACTION_DISCONNECT = "io.github.p1neapplexpress.openflux.ACTION_DISCONNECT"
         const val ACTION_CHECK_PING = "io.github.p1neapplexpress.openflux.ACTION_CHECK_PING"
+
+        @Volatile var connectedAtRealtime: Long = 0L
+        @Volatile var activeTunnelName: String? = null
     }
 
     private lateinit var vpn: VpnServiceController
@@ -38,72 +47,195 @@ class SocksVpnService : android.net.VpnService() {
     @Volatile private var lastIntent: Intent? = null
     private val serviceScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main + kotlinx.coroutines.SupervisorJob())
     private var pingJob: kotlinx.coroutines.Job? = null
+    private var startupJob: kotlinx.coroutines.Job? = null
     private val alreadyStopping = java.util.concurrent.atomic.AtomicBoolean(false)
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+
+    private fun registerNetworkCallback() {
+        if (networkCallback != null) return
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                Logx.i(TAG, "Underlying network changed: available $network")
+                runCatching { setUnderlyingNetworks(arrayOf(network)) }
+            }
+
+            override fun onLost(network: Network) {
+                Logx.i(TAG, "Underlying network lost: $network")
+                runCatching { setUnderlyingNetworks(null) }
+                if (vpn.isRunning.get()) {
+                    EventBus.dispatch(AppEvent.WaitingForNetwork)
+                }
+            }
+
+            override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
+                if (networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
+                    runCatching { setUnderlyingNetworks(arrayOf(network)) }
+                }
+            }
+        }
+        networkCallback = callback
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                cm.registerDefaultNetworkCallback(callback)
+            } else {
+                val req = NetworkRequest.Builder()
+                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    .build()
+                cm.registerNetworkCallback(req, callback)
+            }
+            Logx.i(TAG, "Underlying network callback registered")
+        }.onFailure {
+            Logx.w(TAG, "Failed to register network callback: ${it.message}")
+        }
+    }
+
+    private fun unregisterNetworkCallback() {
+        networkCallback?.let {
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            runCatching { cm?.unregisterNetworkCallback(it) }
+            networkCallback = null
+            Logx.i(TAG, "Underlying network callback unregistered")
+        }
+        runCatching { setUnderlyingNetworks(null) }
+    }
 
     private val binder = object : IUnifiedService.Stub() {
-        override fun isVpnRunning(): Boolean = vpn.isRunning.get()
+        override fun isVpnRunning(): Boolean = if (::vpn.isInitialized) vpn.isRunning.get() else false
         override fun stopVpn() = stopEverything()
-        override fun isFServiceRunning(): Boolean = supervisor.isConnected
-        override fun stopOpenFluxNative() = supervisor.stop()
+        override fun isFServiceRunning(): Boolean = if (::supervisor.isInitialized) supervisor.isConnected else false
+        override fun stopOpenFluxNative() {
+            if (::supervisor.isInitialized) supervisor.stop()
+        }
 
         override fun startOpenFluxNative(transport: String?, args: Array<String>) {
             transport ?: return
-            supervisor.start(transport, args.toList())
+            if (::supervisor.isInitialized) supervisor.start(transport, args.toList())
         }
 
         override fun startTun2Socks() {
             synchronized(this@SocksVpnService) {
+                if (!::vpn.isInitialized || !::supervisor.isInitialized) return
                 if (vpn.isRunning.get()) {
-                    Logx.d(TAG, "tun2socks is already running, ignoring duplicate start")
+                    Logx.d(TAG, "VPN is already running, ignoring duplicate start")
                     return
                 }
-                val fd = vpn.fd
-                if (fd <= 0) {
-                    Logx.e(TAG, "no tun fd; aborting tun2socks start")
+                val rawFd = vpn.fileDescriptor ?: run {
+                    Logx.e(TAG, "no tun fd; aborting start")
                     return
                 }
                 val i = lastIntent ?: run {
-                    Logx.e(TAG, "no lastIntent; aborting tun2socks start")
+                    Logx.e(TAG, "no lastIntent; aborting start")
                     return
                 }
 
-                val ok = tun2socks.start(
-                    fd = fd,
-                    server = i.getStringExtra(Constants.INTENT_SERVER) ?: "127.0.0.1",
-                    port = i.getIntExtra(Constants.INTENT_PORT, 1080),
-                    username = i.getStringExtra(Constants.INTENT_USERNAME),
-                    password = i.getStringExtra(Constants.INTENT_PASSWORD),
-                    dns = i.getStringExtra(Constants.INTENT_DNS) ?: "8.8.8.8",
-                    secondaryDns = i.getStringExtra(Constants.INTENT_SECONDARY_DNS),
-                    dnsPort = i.getIntExtra(Constants.INTENT_DNS_PORT, 53),
-                    ipv6 = i.getBooleanExtra(Constants.INTENT_IPV6_PROXY, false),
-                    udpgw = i.getStringExtra(Constants.INTENT_UDP_GW),
-                    mtu = AppSettings(this@SocksVpnService).mtu,
-                )
-
+                val ok = supervisor.passTunFd(rawFd)
                 if (ok) {
                     vpn.isRunning.set(true)
+                    connectedAtRealtime = android.os.SystemClock.elapsedRealtime()
+                    val tName = i.getStringExtra(Constants.INTENT_NAME)
+                    activeTunnelName = tName
                     notifications.startSpeedUpdates()
-                    EventBus.dispatch(AppEvent.LogMessage("[I] tun2socks running"))
-                    Logx.i(TAG, "tun2socks running")
+                    registerNetworkCallback()
+                    EventBus.dispatch(AppEvent.LogMessage("[I] FluxonCore active (Direct TUN)"))
+                    EventBus.dispatch(AppEvent.VpnConnected(tName))
+                    Logx.i(TAG, "FluxonCore active")
+
+                    val appSettings = AppSettings(applicationContext)
+                    if (appSettings.shareLanProxy) {
+                        val session = LocalSocksSession.getActive()
+                        HotspotProxyBridge.start(
+                            lanPort = appSettings.lanProxyPort,
+                            targetLocalPort = session.port,
+                            authEnabled = appSettings.socks5AuthEnabled,
+                            username = session.username,
+                            password = session.password
+                        )
+                    }
                 } else {
-                    Logx.e(TAG, "tun2socks failed")
-                    EventBus.dispatch(AppEvent.LogMessage("[E] tun2socks failed"))
-                    stopEverything()
+                    Logx.e(TAG, "Failed to pass TUN FD to native core")
                 }
             }
         }
 
-        override fun getFd(): Int = vpn.fd
+        override fun getFd(): Int = if (::vpn.isInitialized) vpn.fd else -1
+    }
+
+    @Volatile private var currentTransportType: String = "yandex"
+    @Volatile private var currentTransportPayload: Array<String> = emptyArray()
+
+    private fun rotateActivePayloadLanes(): Array<String>? {
+        val payload = currentTransportPayload.toMutableList()
+        val urlsIdx = payload.indexOf("--urls")
+        if (urlsIdx == -1 || urlsIdx + 1 >= payload.size) return null
+        val rawUrls = payload[urlsIdx + 1]
+        val list = rawUrls.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        if (list.size <= 1) return null
+        val rotatedList = list.drop(1) + list.take(1)
+        payload[urlsIdx + 1] = rotatedList.joinToString(",")
+        val urlIdx = payload.indexOf("--url")
+        if (urlIdx != -1 && urlIdx + 1 < payload.size) {
+            payload[urlIdx + 1] = rotatedList.first()
+        }
+        val result = payload.toTypedArray()
+        currentTransportPayload = result
+        return result
     }
 
     override fun onCreate() {
         super.onCreate()
-        NativeBridge.ensureLoaded(applicationContext)
+        runCatching { NativeBridge.ensureLoaded(applicationContext) }
         vpn = VpnServiceController(this)
         supervisor = NativeProcessSupervisor(applicationContext)
         tun2socks = Tun2SocksLauncher(applicationContext)
         notifications = VpnNotificationManager(this)
+
+        serviceScope.launch {
+            EventBus.events.collect { event ->
+                when (event) {
+                    is AppEvent.TransportDisconnected -> {
+                        if (vpn.isRunning.get() && !alreadyStopping.get()) {
+                            Logx.w(TAG, "Transport disconnected in running service; checking for multi-lane failover")
+                            val rotated = rotateActivePayloadLanes()
+                            if (rotated != null) {
+                                serviceScope.launch(Dispatchers.IO) {
+                                    EventBus.dispatch(AppEvent.Reconnecting(activeTunnelName))
+                                    EventBus.dispatch(AppEvent.LogMessage("[I] [TRANSPORT] Автоматическая ротация каналов (Service)..."))
+                                    supervisor.start(currentTransportType, rotated.toList())
+                                    val rawFd = vpn.fileDescriptor
+                                    if (rawFd != null && supervisor.passTunFd(rawFd)) {
+                                        var ready = false
+                                        for (step in 1..40) {
+                                            kotlinx.coroutines.delay(250)
+                                            if (alreadyStopping.get() || !isActive) return@launch
+                                            if (supervisor.isConnected) {
+                                                ready = true
+                                                break
+                                            }
+                                        }
+                                        if (ready) {
+                                            EventBus.dispatch(AppEvent.VpnConnected(activeTunnelName))
+                                            EventBus.dispatch(AppEvent.LogMessage("[S] Ротация каналов завершена, связь восстановлена"))
+                                            Logx.i(TAG, "Multi-lane rotation successful")
+                                        } else {
+                                            Logx.e(TAG, "Multi-lane failover timed out")
+                                            stopEverything()
+                                        }
+                                    } else {
+                                        Logx.e(TAG, "Failed to pass TUN FD during multi-lane failover")
+                                        stopEverything()
+                                    }
+                                }
+                            } else {
+                                Logx.e(TAG, "Transport disconnected without alternate lanes, stopping service")
+                                stopEverything()
+                            }
+                        }
+                    }
+                    else -> {}
+                }
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -119,70 +251,130 @@ class SocksVpnService : android.net.VpnService() {
             return START_STICKY
         }
         lastIntent = intent
-        val tunnelName = intent.getStringExtra(Constants.INTENT_NAME)
+        val tunnelName = intent.getStringExtra(Constants.INTENT_NAME) ?: getString(R.string.app_name)
         notifications.startForeground(tunnelName)
 
-        if (vpn.isConfigured()) {
-            Logx.d(TAG, "VPN already configured, ignoring")
+        if (vpn.isConfigured() && supervisor.isConnected && vpn.isRunning.get()) {
+            Logx.d(TAG, "VPN already configured and running, ignoring duplicate start")
             return START_STICKY
         }
 
         alreadyStopping.set(false)
-        val configured = vpn.configure(intent)
-        if (!configured) {
-            Logx.e(TAG, "VPN configure failed, aborting startup")
-            stopEverything()
-            return START_NOT_STICKY
+        val transportType = intent.getStringExtra(Constants.INTENT_TRANSPORT_TYPE) ?: "yandex"
+        val transportPayload = try {
+            intent.getStringArrayExtra(Constants.INTENT_TRANSPORT_PAYLOAD)
+                ?: intent.getCharSequenceArrayExtra(Constants.INTENT_TRANSPORT_PAYLOAD)?.map { it.toString() }?.toTypedArray()
+                ?: intent.getStringArrayListExtra(Constants.INTENT_TRANSPORT_PAYLOAD)?.toTypedArray()
+                ?: (intent.getSerializableExtra(Constants.INTENT_TRANSPORT_PAYLOAD) as? Array<*>)?.filterIsInstance<String>()?.toTypedArray()
+                ?: emptyArray()
+        } catch (e: Exception) {
+            Logx.e(TAG, "Failed to read INTENT_TRANSPORT_PAYLOAD", e)
+            emptyArray()
         }
-        EventBus.dispatch(AppEvent.LogMessage("[S] VPN configured"))
-        Logx.i(TAG, "VPN configured")
+        currentTransportType = transportType
+        currentTransportPayload = transportPayload
 
-        val isAutonomous = intent.getBooleanExtra(Constants.INTENT_AUTONOMOUS, false)
-        val transportType = intent.getStringExtra(Constants.INTENT_TRANSPORT_TYPE)
-        val transportPayload = intent.getStringArrayExtra(Constants.INTENT_TRANSPORT_PAYLOAD)
-        if (isAutonomous && !transportType.isNullOrBlank() && transportPayload != null && transportPayload.isNotEmpty()) {
-            serviceScope.launch(Dispatchers.IO) {
-                try {
-                    EventBus.dispatch(AppEvent.LogMessage("[I] Starting native transport ($transportType)..."))
-                    supervisor.start(transportType, transportPayload.toList())
+        startupJob?.cancel()
+        startupJob = serviceScope.launch(Dispatchers.IO) {
+            try {
+                if (supervisor.isRunning) {
+                    Logx.i(TAG, "Stopping active supervisor before reconfiguring VPN interface")
+                    supervisor.stop()
+                    kotlinx.coroutines.delay(100)
+                }
+                if (!vpn.configure(intent)) {
+                    Logx.e(TAG, "VPN configure failed, aborting startup")
+                    EventBus.dispatch(AppEvent.LogMessage("[E] VPN configure failed"))
+                    EventBus.dispatch(AppEvent.TransportDisconnected)
+                    stopEverything()
+                    return@launch
+                }
+                EventBus.dispatch(AppEvent.LogMessage("[S] VPN configured"))
+                Logx.i(TAG, "VPN configured")
 
-                    var transportReady = false
-                    for (step in 1..40) {
-                        kotlinx.coroutines.delay(250)
-                        if (supervisor.isConnected) {
-                            transportReady = true
-                            Logx.i(TAG, "Transport ready after ${step * 250}ms")
-                            break
+                val dohEnabled = intent.getBooleanExtra(Constants.INTENT_DOH_ENABLED, false)
+                val dohUrl = intent.getStringExtra(Constants.INTENT_DOH_URL)
+                if (dohEnabled && !dohUrl.isNullOrBlank()) {
+                    EventBus.dispatch(AppEvent.LogMessage("[I] DNS-over-HTTPS (DoH) active: $dohUrl"))
+                    Logx.i(TAG, "DNS-over-HTTPS (DoH) active: $dohUrl")
+                }
+
+                EventBus.dispatch(AppEvent.LogMessage("[I] Starting native transport ($transportType)..."))
+                supervisor.start(transportType, transportPayload.toList())
+
+                // IPC-01: Pass TUN FileDescriptor directly to the unified FluxonCore via abstract socket
+                val rawFd = vpn.fileDescriptor
+                if (rawFd == null) {
+                    Logx.e(TAG, "No TUN file descriptor available")
+                    EventBus.dispatch(AppEvent.LogMessage("[E] No TUN file descriptor"))
+                    stopEverything()
+                    return@launch
+                }
+
+                EventBus.dispatch(AppEvent.LogMessage("[I] Передача дескриптора TUN в ядро FluxonCore..."))
+                val fdPassed = supervisor.passTunFd(rawFd)
+                if (!fdPassed) {
+                    Logx.e(TAG, "Failed to pass TUN FD to native core")
+                    EventBus.dispatch(AppEvent.LogMessage("[E] Ошибка передачи TUN FD в ядро"))
+                    EventBus.dispatch(AppEvent.TransportDisconnected)
+                    stopEverything()
+                    return@launch
+                }
+                EventBus.dispatch(AppEvent.LogMessage("[S] Дескриптор TUN успешно принят ядром"))
+
+                // Wait for transport readiness inside the service
+                var ready = false
+                for (step in 1..80) {
+                    kotlinx.coroutines.delay(250)
+                    if (alreadyStopping.get() || !isActive) return@launch
+                    if (supervisor.isConnected) {
+                        ready = true
+                        Logx.i(TAG, "Transport ready after ${step * 250}ms")
+                        break
+                    }
+                }
+
+                if (alreadyStopping.get() || !isActive) return@launch
+
+                if (ready) {
+                    synchronized(this@SocksVpnService) {
+                        vpn.isRunning.set(true)
+                        connectedAtRealtime = android.os.SystemClock.elapsedRealtime()
+                        val tName = intent.getStringExtra(Constants.INTENT_NAME) ?: activeTunnelName
+                        activeTunnelName = tName
+                        notifications.startSpeedUpdates()
+                        registerNetworkCallback()
+                        EventBus.dispatch(AppEvent.LogMessage("[I] Единое ядро FluxonCore активно (Direct TUN)"))
+                        EventBus.dispatch(AppEvent.VpnConnected(tName))
+                        Logx.i(TAG, "FluxonCore active")
+
+                        val appSettings = AppSettings(applicationContext)
+                        if (appSettings.shareLanProxy && !HotspotProxyBridge.running) {
+                            val session = LocalSocksSession.getActive()
+                            HotspotProxyBridge.start(
+                                lanPort = appSettings.lanProxyPort,
+                                targetLocalPort = session.port,
+                                authEnabled = appSettings.socks5AuthEnabled,
+                                username = session.username,
+                                password = session.password
+                            )
                         }
                     }
-
-                    if (!transportReady) {
-                        Logx.e(TAG, "Transport failed to start within timeout")
-                        EventBus.dispatch(AppEvent.LogMessage("[E] Transport timeout"))
-                        return@launch
-                    }
-
-                    withContext(Dispatchers.Main) {
-                        binder.startTun2Socks()
-                    }
-
-                    val appSettings = AppSettings(applicationContext)
-                    if (appSettings.shareLanProxy) {
-                        val session = LocalSocksSession.getActive()
-                        HotspotProxyBridge.start(
-                            lanPort = appSettings.lanProxyPort,
-                            targetLocalPort = session.port,
-                            authEnabled = appSettings.socks5AuthEnabled,
-                            username = session.username,
-                            password = session.password
-                        )
-                    }
-                } catch (e: Exception) {
-                    Logx.e(TAG, "Error in automatic service startup", e)
+                } else {
+                    Logx.e(TAG, "Transport startup timed out")
+                    EventBus.dispatch(AppEvent.LogMessage("[E] Transport startup timed out"))
+                    EventBus.dispatch(AppEvent.TransportDisconnected)
+                    stopEverything()
+                }
+            } catch (e: Exception) {
+                if (!alreadyStopping.get() && isActive) {
+                    Logx.e(TAG, "Error in service startup", e)
+                    EventBus.dispatch(AppEvent.TransportDisconnected)
+                    stopEverything()
                 }
             }
         }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
@@ -194,8 +386,10 @@ class SocksVpnService : android.net.VpnService() {
     }
 
     override fun onDestroy() {
-        serviceScope.cancel()
+        startupJob?.cancel()
+        startupJob = null
         stopEverything()
+        serviceScope.cancel()
         super.onDestroy()
     }
 
@@ -246,7 +440,7 @@ class SocksVpnService : android.net.VpnService() {
                 conn.connectTimeout = 4000
                 conn.readTimeout = 4000
                 conn.instanceFollowRedirects = false
-                conn.setRequestProperty("User-Agent", "Fluxon/1.1.0")
+                conn.setRequestProperty("User-Agent", "Fluxon/1.2.0")
                 conn.setRequestProperty("Connection", "close")
                 val t0 = android.os.SystemClock.elapsedRealtime()
                 try {
@@ -271,8 +465,13 @@ class SocksVpnService : android.net.VpnService() {
             return
         }
         Logx.i(TAG, "stopEverything")
+        startupJob?.cancel()
+        startupJob = null
+        connectedAtRealtime = 0L
+        activeTunnelName = null
         EventBus.dispatch(AppEvent.VpnDisconnected)
         notifications.stopSpeedUpdates()
+        runCatching { unregisterNetworkCallback() }
         runCatching { HotspotProxyBridge.stop() }
         runCatching { tun2socks.stop() }
         runCatching { supervisor.stop() }

@@ -6,5 +6,8 @@ sealed interface AppEvent {
     data class SpeedUpdate(val rxSpeed: Long, val txSpeed: Long) : AppEvent
     data object TransportConnected : AppEvent
     data object TransportDisconnected : AppEvent
+    data class Reconnecting(val tunnelName: String? = null) : AppEvent
+    data object WaitingForNetwork : AppEvent
+    data class VpnConnected(val tunnelName: String? = null) : AppEvent
     data object VpnDisconnected : AppEvent
 }

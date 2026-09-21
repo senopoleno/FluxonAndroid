@@ -26,6 +26,8 @@ data class VPNConfig(
     val remotePort: Int = 443,
     val transportType: String? = null,
     val transportPayload: Array<String>? = null,
+    val dohEnabled: Boolean = false,
+    val dohUrl: String? = null,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -51,6 +53,8 @@ data class VPNConfig(
             remoteServer == other.remoteServer &&
             remotePort == other.remotePort &&
             transportType == other.transportType &&
+            dohEnabled == other.dohEnabled &&
+            dohUrl == other.dohUrl &&
             (transportPayload == null && other.transportPayload == null ||
                 transportPayload != null && other.transportPayload != null &&
                 transportPayload.contentEquals(other.transportPayload))
@@ -78,6 +82,8 @@ data class VPNConfig(
         result = 31 * result + (remoteServer?.hashCode() ?: 0)
         result = 31 * result + remotePort
         result = 31 * result + (transportType?.hashCode() ?: 0)
+        result = 31 * result + dohEnabled.hashCode()
+        result = 31 * result + (dohUrl?.hashCode() ?: 0)
         result = 31 * result + (transportPayload?.contentHashCode() ?: 0)
         return result
     }
@@ -90,9 +96,11 @@ object TunnelEndpointHelper {
             return Pair("ws-api.oneme.ru", 443)
         }
         if (transportType == "cups" || transportType == "cupsonline") {
-            return Pair("cups.online", 443)
+            return Pair("interview.cups.online", 443)
         }
-        val urlStr = argValue(tunnel.transportConnPayload, "--url")
+        val rawUrls = argValue(tunnel.transportConnPayload, "--urls")
+        val rawUrl = argValue(tunnel.transportConnPayload, "--url")
+        val urlStr = (if (rawUrls.isNotBlank()) rawUrls.split(",").firstOrNull()?.trim() else null)?.ifEmpty { null } ?: rawUrl
         if (urlStr.isNotBlank()) {
             val fixedUrl = if (!urlStr.startsWith("http://", ignoreCase = true) && !urlStr.startsWith("https://", ignoreCase = true)) {
                 "https://$urlStr"

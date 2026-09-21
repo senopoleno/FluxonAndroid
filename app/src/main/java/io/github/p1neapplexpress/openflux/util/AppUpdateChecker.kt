@@ -212,7 +212,7 @@ object AppUpdateChecker {
         }
 
         view.findViewById<View>(R.id.btn_download_update).setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             dialog.dismiss()
             try {
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl)).apply {
@@ -225,13 +225,22 @@ object AppUpdateChecker {
         }
 
         view.findViewById<View>(R.id.btn_update_later).setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             dialog.dismiss()
         }
 
         dialog.show()
 
         val width = (activity.resources.displayMetrics.widthPixels * 0.88).toInt()
+        val maxNotesHeight = (activity.resources.displayMetrics.heightPixels * 0.36).toInt()
+        val notesScroll = view.findViewById<android.widget.ScrollView>(R.id.update_notes_scroll)
+        notesScroll.post {
+            if (notesScroll.height > maxNotesHeight) {
+                notesScroll.layoutParams = notesScroll.layoutParams.apply {
+                    height = maxNotesHeight
+                }
+            }
+        }
         dialog.window?.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT)
     }
 

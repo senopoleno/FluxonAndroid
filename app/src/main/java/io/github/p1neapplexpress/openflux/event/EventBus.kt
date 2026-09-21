@@ -6,6 +6,16 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
 object EventBus {
+    private const val MAX_LOG_HISTORY = 1000
+
+    data class LogEntry(
+        val message: String,
+        val timestamp: Long = System.currentTimeMillis()
+    )
+
+    private val logHistory = ArrayDeque<LogEntry>(MAX_LOG_HISTORY)
+    private val lock = Any()
+
     private val _events = MutableSharedFlow<AppEvent>(
         replay = 0,
         extraBufferCapacity = 128,
@@ -13,7 +23,35 @@ object EventBus {
     )
     val events: SharedFlow<AppEvent> = _events.asSharedFlow()
 
+    fun getLogHistory(): List<String> = synchronized(lock) {
+        logHistory.map { it.message }
+    }
+
+    fun getLogEntries(): List<LogEntry> = synchronized(lock) {
+        logHistory.toList()
+    }
+
+    fun clearLogHistory() = synchronized(lock) {
+        logHistory.clear()
+    }
+
     fun dispatch(event: AppEvent) {
-        _events.tryEmit(event)
+        val finalEvent = if (event is AppEvent.LogMessage) {
+            val now = System.currentTimeMillis()
+            synchronized(lock) {
+                event.message.split('\n').forEach { line ->
+                    if (line.isNotEmpty()) {
+                        if (logHistory.size >= MAX_LOG_HISTORY) {
+                            logHistory.removeFirst()
+                        }
+                        logHistory.addLast(LogEntry(line, now))
+                    }
+                }
+            }
+            event
+        } else {
+            event
+        }
+        _events.tryEmit(finalEvent)
     }
 }

@@ -61,7 +61,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         supportFragmentManager.beginTransaction()
-            .replace(R.id.main, MainFragment(), "")
+            .replace(R.id.main, TunnelsFragment(), "")
             .commit()
 
         lifecycleScope.launch {
@@ -83,7 +83,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleDeepLink(intent: Intent) {
         val uri = intent.data ?: return
-        if (!uri.scheme.equals("openflux", ignoreCase = true) && !uri.scheme.equals("fluxon", ignoreCase = true)) return
+        if (!uri.scheme.equals("openflux", ignoreCase = true) &&
+            !uri.scheme.equals("fluxon", ignoreCase = true) &&
+            !uri.scheme.equals("paperflux", ignoreCase = true)) return
         val tunnel = TunnelLinkParser.fromUri(uri, this) ?: return
 
         com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
