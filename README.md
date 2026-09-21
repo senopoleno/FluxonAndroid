@@ -9,7 +9,7 @@
 </div>
 
 <p align="center">
-  OpenFlux-клиент для Android (v1.2.0). Форк OpenFluxAndroid.
+  OpenFlux-клиент для Android. Форк OpenFluxAndroid.
 </p>
 
 <p align="center">
