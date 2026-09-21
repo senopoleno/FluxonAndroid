@@ -14,28 +14,40 @@ class NativeProcessSupervisor(private val context: Context) {
 
     companion object {
         private const val TAG = "NativeProcSupervisor"
-        private const val STARTUP_GRACE_MS = 2_000L
+        private const val STARTUP_FALLBACK_TIMEOUT_MS = 8_500L
         private const val NATIVE_LIB = "libp1npplydtransport.so"
+        @Volatile var activeLogLevel: String = ""
     }
 
     private val handler = Handler(Looper.getMainLooper())
     @Volatile private var process: Process? = null
     @Volatile private var stdoutThread: Thread? = null
     @Volatile private var gracePeriodRunnable: Runnable? = null
+    @Volatile private var delayedConnectRunnable: Runnable? = null
 
     private val running = AtomicBoolean(false)
     private val connected = AtomicBoolean(false)
     private val shuttingDown = AtomicBoolean(false)
 
+    @Volatile private var currentTunSocketName: String? = null
+    val tunSocketName: String? get() = currentTunSocketName
+
     val isConnected: Boolean get() = connected.get()
-    val isRunning: Boolean get() = running.get()
+    val isRunning: Boolean get() = running.get() && process?.isAlive == true
+
+    fun passTunFd(fd: java.io.FileDescriptor): Boolean {
+        val sockName = currentTunSocketName ?: return false
+        return io.github.p1neapplexpress.openflux.util.NativeFdPasser.sendFd(sockName, fd)
+    }
 
     fun start(transportType: String, payload: List<String>) {
-        if (running.getAndSet(true)) {
-            Logx.d(TAG, "already running, ignoring start")
-            return
+        if (process?.isAlive == true || running.get()) {
+            Logx.w(TAG, "Previous native process was still active during start(); stopping it first")
+            stop()
+            try { Thread.sleep(150) } catch (_: InterruptedException) {}
         }
         shuttingDown.set(false)
+        running.set(true)
         connected.set(false)
         Logx.i(TAG, "start transport=$transportType")
         spawn(transportType, payload)
@@ -52,13 +64,73 @@ class NativeProcessSupervisor(private val context: Context) {
     private fun spawn(transportType: String, payload: List<String>) {
         val libPath = "${context.applicationInfo.nativeLibraryDir}/$NATIVE_LIB"
         try {
-            
-            val isDebug = payload.contains("--debug") || Logx.isVerbose
-            val cleanPayload = payload.filter { it != "--debug" }
+            val appSettings = io.github.p1neapplexpress.openflux.util.AppSettings(context)
+            val currentLogLevel = activeLogLevel.ifBlank { appSettings.connectionLogLevel }
+            val isDebug = currentLogLevel == "DEBUG" || appSettings.verboseLog
+
+            val cleanPayload = mutableListOf<String>()
+            var pIdx = 0
+            while (pIdx < payload.size) {
+                val arg = payload[pIdx]
+                when {
+                    arg == "--debug" -> pIdx++
+                    arg == "--log-level" -> pIdx += 2
+                    else -> {
+                        cleanPayload.add(arg)
+                        pIdx++
+                    }
+                }
+            }
+
+            val socketName = "@openflux_tun_${System.currentTimeMillis()}"
+            currentTunSocketName = socketName
+
             val cmd = buildList {
                 add(libPath)
                 if (isDebug) {
                     add("--debug")
+                }
+                var hasRole = false
+                var hasCodec = false
+                var hasInbound = false
+                var hasTunSocket = false
+                var hasTunMtu = false
+                for (arg in cleanPayload) {
+                    if (arg == "--client" || arg == "-client" || arg == "--role=client" || arg == "-role=client" ||
+                        arg == "--role" || arg == "-role" || arg.startsWith("--role=") || arg.startsWith("-role=")) {
+                        hasRole = true
+                    }
+                    if (arg == "--exit-node" || arg == "-exit-node" || arg == "--role=exit" || arg == "-role=exit") {
+                        hasRole = true
+                    }
+                    if (arg == "--codec" || arg.startsWith("--codec=") || arg.startsWith("-codec=")) {
+                        hasCodec = true
+                    }
+                    if (arg == "--inbound" || arg.startsWith("--inbound=") || arg == "-inbound" || arg.startsWith("-inbound=") ||
+                        arg == "--tun" || arg == "-tun" || arg == "--socks5-mode" || arg == "-socks5-mode") {
+                        hasInbound = true
+                    }
+                    if (arg == "--tun-socket" || arg.startsWith("--tun-socket=")) {
+                        hasTunSocket = true
+                    }
+                    if (arg == "--tun-mtu" || arg.startsWith("--tun-mtu=")) {
+                        hasTunMtu = true
+                    }
+                }
+                if (!hasRole) {
+                    add("--role=client")
+                }
+                if (!hasCodec) {
+                    add("--codec=legacy")
+                }
+                if (!hasInbound) {
+                    add("--inbound=tun")
+                }
+                if (!hasTunSocket) {
+                    add("--tun-socket=$socketName")
+                }
+                if (!hasTunMtu) {
+                    add("--tun-mtu=${appSettings.mtu}")
                 }
                 addAll(cleanPayload)
             }
@@ -68,12 +140,18 @@ class NativeProcessSupervisor(private val context: Context) {
             if (passIdx != null && passIdx + 1 < logCmd.size) logCmd[passIdx + 1] = "***"
             Logx.i(TAG, "exec: ${logCmd.joinToString(" ")}")
 
+            val urlsIdx = cleanPayload.indexOf("--urls")
+            val multiLaneCount = if (urlsIdx != -1 && urlsIdx + 1 < cleanPayload.size) {
+                cleanPayload[urlsIdx + 1].split(",").map { it.trim() }.filter { it.isNotEmpty() }.size
+            } else 1
+            val isMultiLane = multiLaneCount > 1
+
             val pb = ProcessBuilder(cmd)
                 .directory(context.filesDir)
                 .redirectErrorStream(true)
             val proc = pb.start()
             process = proc
-            proc.outputStream.close()
+            runCatching { proc.outputStream.close() }
 
             stdoutThread = Thread {
                 try {
@@ -82,20 +160,101 @@ class NativeProcessSupervisor(private val context: Context) {
                         while (r.readLine().also { line = it } != null) {
                             val l = line ?: continue
                             if (l.isBlank()) continue
+                            val lClean = l.replace(" (gVisor)", "")
                             android.util.Log.d("NativeStdout", l)
-                            EventBus.dispatch(AppEvent.LogMessage(l))
 
-                            if (l.contains("CONNECTED!", ignoreCase = true) ||
-                                l.contains("WS ready", ignoreCase = true) ||
-                                l.contains("WS connected", ignoreCase = true) ||
-                                l.contains("WebSocket connected", ignoreCase = true) ||
-                                l.contains("Signaling connected", ignoreCase = true) ||
-                                l.contains("auth OK", ignoreCase = true)
+                            // Multi-lane recovery observer
+                            if (isMultiLane && (l.contains("lane", ignoreCase = true) || l.contains("channel", ignoreCase = true)) &&
+                                (l.contains("fail", ignoreCase = true) || l.contains("disconnect", ignoreCase = true) || l.contains("reconnect", ignoreCase = true) || l.contains("recover", ignoreCase = true))
                             ) {
-                                if (!connected.getAndSet(true)) {
-                                    EventBus.dispatch(AppEvent.TransportConnected)
-                                    Logx.i(TAG, "Native transport confirmed connected from stdout: $l")
+                                EventBus.dispatch(AppEvent.LogMessage("[TRANSPORT] Один канал Yandex Docs восстанавливается; туннель продолжает работать"))
+                                Logx.i(TAG, "Multi-lane recovery active: $l")
+                            }
+
+                            // 1. Detect critical transport startup errors (ignore client proxy/routing lines)
+                            if (!connected.get() && !l.contains("[ROUTER]") && !l.contains("[SOCKS5]")) {
+                                if (l.contains("Failed to start transport", ignoreCase = true) ||
+                                    l.contains("panic:", ignoreCase = true) ||
+                                    l.contains("Unknown transport type", ignoreCase = true) ||
+                                    l.contains("flag provided but not defined", ignoreCase = true)
+                                ) {
+                                    delayedConnectRunnable?.let { handler.removeCallbacks(it) }
+                                    delayedConnectRunnable = null
+                                    gracePeriodRunnable?.let { handler.removeCallbacks(it) }
+                                    gracePeriodRunnable = null
+                                    connected.set(false)
+                                    running.set(false)
+                                    EventBus.dispatch(AppEvent.TransportDisconnected)
+                                    EventBus.dispatch(AppEvent.LogMessage("[E] Transport error: $l"))
+                                    Logx.e(TAG, "Transport error detected: $l")
+                                    continue
                                 }
+                            }
+
+                            // 2. Detect connection success immediately (MUST NOT be skipped by log level)
+                            if (l.contains("WebSocket connected", ignoreCase = true) ||
+                                l.contains("WS connected", ignoreCase = true) ||
+                                l.contains("WS ready", ignoreCase = true) ||
+                                l.contains("[MAX] Connected", ignoreCase = true) ||
+                                l.contains("*** CONNECTED! ***", ignoreCase = true) ||
+                                l.contains("Signaling connected", ignoreCase = true) ||
+                                (l.contains("[VOLGA]", ignoreCase = true) && l.contains("transport started", ignoreCase = true)) ||
+                                (l.contains("[CUPS]", ignoreCase = true) && l.contains("transport started", ignoreCase = true)) ||
+                                l.contains("Running as CLIENT", ignoreCase = true) ||
+                                l.contains("Tunnel active", ignoreCase = true) ||
+                                l.contains("Direct TUN FD", ignoreCase = true)
+                            ) {
+                                gracePeriodRunnable?.let { handler.removeCallbacks(it) }
+                                gracePeriodRunnable = null
+
+                                val isYandexWs = transportType.equals("yandex", ignoreCase = true) ||
+                                        l.contains("[YDOCS]", ignoreCase = true)
+                                val delayMs = if (isYandexWs) 2000L else 0L
+
+                                if (delayMs > 0) {
+                                    Logx.i(TAG, "Transport connected, waiting ${delayMs}ms for doc auth to complete before tun2socks...")
+                                    delayedConnectRunnable?.let { handler.removeCallbacks(it) }
+                                    val r = Runnable {
+                                        delayedConnectRunnable = null
+                                        if (running.get() && !shuttingDown.get() && process?.isAlive == true) {
+                                            if (!connected.getAndSet(true)) {
+                                                EventBus.dispatch(AppEvent.TransportConnected)
+                                                Logx.i(TAG, "Native transport confirmed connected from stdout (delayed): $l")
+                                            }
+                                        }
+                                    }
+                                    delayedConnectRunnable = r
+                                    handler.postDelayed(r, delayMs)
+                                } else {
+                                    delayedConnectRunnable?.let { handler.removeCallbacks(it) }
+                                    delayedConnectRunnable = null
+                                    if (!connected.getAndSet(true)) {
+                                        EventBus.dispatch(AppEvent.TransportConnected)
+                                        Logx.i(TAG, "Native transport confirmed connected from stdout: $l")
+                                    }
+                                }
+                            }
+
+                            // 3. UI log level filtering (ONLY gates whether this line is forwarded to the log viewer)
+                            val effLogLevel = activeLogLevel.ifBlank { appSettings.connectionLogLevel }
+                            val isRoutingLog = l.contains("[ROUTER]") || l.contains("DIRECT") ||
+                                    l.contains("PROXY") || l.contains("gVisor")
+                            val isPacketLog = (l.startsWith("<- ") || l.startsWith("-> ") ||
+                                    l.contains("bytes - TCP") || l.contains("bytes - UDP")) && !isRoutingLog
+                            val isDebugLine = (isPacketLog || l.contains("[D]") || l.contains("[DEBUG]", ignoreCase = true)) && !isRoutingLog
+                            val isWarnLine = l.contains("[W]") || l.contains("warning", ignoreCase = true)
+                            val isErrorLine = l.contains("[E]") || l.contains("error", ignoreCase = true) ||
+                                    l.contains("panic:", ignoreCase = true) || l.contains("Failed to start", ignoreCase = true)
+
+                            val allowLog = when (effLogLevel) {
+                                "DEBUG" -> true
+                                "INFO" -> isRoutingLog || !isDebugLine
+                                "WARN" -> isWarnLine || isErrorLine
+                                "ERROR" -> isErrorLine
+                                else -> isRoutingLog || !isDebugLine
+                            }
+                            if (allowLog) {
+                                EventBus.dispatch(AppEvent.LogMessage(l))
                             }
                         }
                     }
@@ -104,6 +263,10 @@ class NativeProcessSupervisor(private val context: Context) {
                         Logx.w(TAG, "stdout reader error: ${e.message}")
                     }
                 } finally {
+                    delayedConnectRunnable?.let { handler.removeCallbacks(it) }
+                    delayedConnectRunnable = null
+                    gracePeriodRunnable?.let { handler.removeCallbacks(it) }
+                    gracePeriodRunnable = null
                     val exitCode = try { proc.waitFor() } catch (_: Exception) { null }
                     if (!shuttingDown.get()) {
                         Logx.e(TAG, "native process exited unexpectedly with code $exitCode")
@@ -124,9 +287,8 @@ class NativeProcessSupervisor(private val context: Context) {
                 if (!shuttingDown.get()) {
                     if (process?.isAlive == true) {
                         if (!connected.get()) {
-                            connected.set(true)
-                            EventBus.dispatch(AppEvent.TransportConnected)
-                            Logx.i(TAG, "native process alive after fallback grace period")
+                            Logx.w(TAG, "Native transport did not report connection within $STARTUP_FALLBACK_TIMEOUT_MS ms")
+                            EventBus.dispatch(AppEvent.LogMessage("[W] Transport startup waiting for connection..."))
                         }
                     } else {
                         Logx.e(TAG, "native process died during startup")
@@ -138,7 +300,7 @@ class NativeProcessSupervisor(private val context: Context) {
                 }
             }
             gracePeriodRunnable = runnable
-            handler.postDelayed(runnable, 6000L)
+            handler.postDelayed(runnable, STARTUP_FALLBACK_TIMEOUT_MS)
 
         } catch (e: Exception) {
             Logx.e(TAG, "spawn failed", e)
@@ -150,15 +312,31 @@ class NativeProcessSupervisor(private val context: Context) {
     }
 
     private fun cleanup() {
+        delayedConnectRunnable?.let { handler.removeCallbacks(it) }
+        delayedConnectRunnable = null
         gracePeriodRunnable?.let { handler.removeCallbacks(it) }
         gracePeriodRunnable = null
         stdoutThread?.interrupt()
         stdoutThread = null
         process?.let { p ->
-            if (p.isAlive) p.destroy()
-            handler.postDelayed({ if (p.isAlive) p.destroyForcibly() }, 1000L)
+            runCatching { p.outputStream?.close() }
+            runCatching { p.inputStream?.close() }
+            runCatching { p.errorStream?.close() }
+            if (p.isAlive) {
+                p.destroy()
+                try {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        p.waitFor(300, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    }
+                } catch (_: Exception) {}
+                if (p.isAlive) {
+                    p.destroyForcibly()
+                }
+            }
         }
         process = null
+        currentTunSocketName = null
     }
+
 
 }
