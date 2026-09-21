@@ -5,7 +5,9 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.ComponentName
 import android.content.Intent
+import androidx.core.content.ContextCompat
 import android.os.Build
 import android.os.IBinder
 import android.os.Process
@@ -18,6 +20,7 @@ import io.github.p1neapplexpress.openflux.R
 import io.github.p1neapplexpress.openflux.event.AppEvent
 import io.github.p1neapplexpress.openflux.event.EventBus
 import io.github.p1neapplexpress.openflux.ui.MainActivity
+import io.github.p1neapplexpress.openflux.util.AppIconManager
 import io.github.p1neapplexpress.openflux.util.AppSettings
 import io.github.p1neapplexpress.openflux.util.Constants
 import io.github.p1neapplexpress.openflux.util.LocalSocksSession
@@ -206,9 +209,18 @@ class FluxonProxyService : Service() {
 
     private fun buildNotification(title: String, text: String): Notification {
         createChannel()
+        val isLight = AppIconManager.getCurrentIcon(this) == AppIconManager.ICON_LIGHT
+        val targetAlias = if (isLight) {
+            "io.github.p1neapplexpress.openflux.ui.MainActivityLight"
+        } else {
+            "io.github.p1neapplexpress.openflux.ui.MainActivityDark"
+        }
+        val mainIntent = Intent().setComponent(ComponentName(this, targetAlias)).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
         val mainPi = PendingIntent.getActivity(
             this, 0,
-            Intent(this, MainActivity::class.java),
+            mainIntent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         val disconnectPi = PendingIntent.getService(
@@ -216,9 +228,14 @@ class FluxonProxyService : Service() {
             Intent(this, FluxonProxyService::class.java).apply { action = ACTION_DISCONNECT },
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
+        val accentColor = if (isLight) {
+            ContextCompat.getColor(this, R.color.ic_launcher_background_light)
+        } else {
+            ContextCompat.getColor(this, R.color.ic_launcher_background_dark)
+        }
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setLargeIcon(io.github.p1neapplexpress.openflux.util.AppIconManager.getNotificationLargeIcon(this))
+            .setColor(accentColor)
             .setContentTitle(title)
             .setContentText(text)
             .setOngoing(true)

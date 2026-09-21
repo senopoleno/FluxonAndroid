@@ -9,8 +9,9 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 
 import android.app.Service
-
+import android.content.ComponentName
 import android.content.Intent
+import androidx.core.content.ContextCompat
 
 import android.net.TrafficStats
 
@@ -183,45 +184,37 @@ class VpnNotificationManager(private val service: Service) {
     }
 
     private fun buildNotification(status: String, speedText: String? = null): Notification {
-
+        val isLight = AppIconManager.getCurrentIcon(service) == AppIconManager.ICON_LIGHT
+        val targetAlias = if (isLight) {
+            "io.github.p1neapplexpress.openflux.ui.MainActivityLight"
+        } else {
+            "io.github.p1neapplexpress.openflux.ui.MainActivityDark"
+        }
+        val mainIntent = Intent().setComponent(ComponentName(service, targetAlias)).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
         val contentIntent = PendingIntent.getActivity(
-
             service,
-
             0,
-
-            Intent(service, MainActivity::class.java),
-
+            mainIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-
         )
 
         val disconnectIntent = Intent(service, SocksVpnService::class.java).apply {
-
             action = SocksVpnService.ACTION_DISCONNECT
-
         }
 
         val disconnectPending = PendingIntent.getService(
-
             service,
-
             1,
-
             disconnectIntent,
-
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-
         )
 
         val title = if (!tunnelName.isNullOrBlank()) {
-
             tunnelName
-
         } else {
-
             service.getString(R.string.notify_title)
-
         }
 
         val pingStr = when (val p = lastPingResultMs) {
@@ -250,11 +243,17 @@ class VpnNotificationManager(private val service: Service) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        val accentColor = if (isLight) {
+            ContextCompat.getColor(service, R.color.ic_launcher_background_light)
+        } else {
+            ContextCompat.getColor(service, R.color.ic_launcher_background_dark)
+        }
+
         val builder = NotificationCompat.Builder(service, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(statusAndSpeed)
             .setSmallIcon(R.drawable.ic_notification)
-            .setLargeIcon(AppIconManager.getNotificationLargeIcon(service))
+            .setColor(accentColor)
             .setOngoing(true)
             .setContentIntent(contentIntent)
             .addAction(R.drawable.ic_speed, service.getString(R.string.action_check_ping), checkPingPending)
