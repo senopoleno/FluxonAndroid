@@ -32,6 +32,7 @@ import android.text.TextWatcher
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.view.doOnLayout
 import androidx.core.view.isVisible
 import androidx.fragment.app.activityViewModels
 import androidx.transition.ChangeBounds
@@ -277,19 +278,34 @@ class TunnelsFragment : BaseFragment() {
             startActivity(Intent(requireContext(), LogsActivity::class.java))
         }
         if (vm.active.value is TunnelState.Running) {
-            val transY = 22f * resources.displayMetrics.density
+            val transY = getRunningStatusTranslationY()
             uptimeContainer.alpha = 1f
             uptimeContainer.translationY = transY
             statusText.translationY = transY
             uptimeText.visibility = View.VISIBLE
             uptimeText.alpha = 1f
         } else if (vm.active.value is TunnelState.Idle) {
-            val transY = 44f * resources.displayMetrics.density
+            val transY = getIdleStatusTranslationY()
             statusText.translationY = transY
             uptimeContainer.alpha = 0f
             uptimeContainer.translationY = transY + (10f * resources.displayMetrics.density)
             uptimeText.visibility = View.GONE
             uptimeText.alpha = 0f
+        }
+
+        view.doOnLayout {
+            if (vm.active.value is TunnelState.Idle || currentVisualState is TunnelState.Idle) {
+                val transY = getIdleStatusTranslationY()
+                statusText.translationY = transY
+                uptimeContainer.translationY = transY + (10f * resources.displayMetrics.density)
+            }
+        }
+        view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            if (vm.active.value is TunnelState.Idle || currentVisualState is TunnelState.Idle) {
+                val transY = getIdleStatusTranslationY()
+                statusText.translationY = transY
+                uptimeContainer.translationY = transY + (10f * resources.displayMetrics.density)
+            }
         }
 
         view.findViewById<View>(R.id.addButton).setOnClickListener {
@@ -819,7 +835,8 @@ class TunnelsFragment : BaseFragment() {
                     statusText.text = getString(R.string.tap_to_connect)
                     statusText.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary))
                     statusText.alpha = 1f
-                    statusText.translationY = 44f * resources.displayMetrics.density
+                    val transY = getIdleStatusTranslationY()
+                    statusText.translationY = transY
                     aurora.setIntensity(0.4f)
                     pulseRings.stop()
                     stopRotation()
@@ -831,7 +848,7 @@ class TunnelsFragment : BaseFragment() {
                     connectButton.scaleY = 1f
                     uptimeContainer.animate().cancel()
                     uptimeContainer.alpha = 0f
-                    uptimeContainer.translationY = 54f * resources.displayMetrics.density
+                    uptimeContainer.translationY = transY + (10f * resources.displayMetrics.density)
                     uptimeText.visibility = View.GONE
                     uptimeText.alpha = 0f
                 }
@@ -1056,8 +1073,37 @@ class TunnelsFragment : BaseFragment() {
         }
     }
 
+    private fun getRunningStatusTranslationY(): Float {
+        return 22f * resources.displayMetrics.density
+    }
+
+    private fun getIdleStatusTranslationY(): Float {
+        val density = resources.displayMetrics.density
+        if (!::centerContainer.isInitialized || !::statusText.isInitialized || !::configSelector.isInitialized) {
+            return 80f * density
+        }
+        val centerTop = centerContainer.top.toFloat()
+        val configBottom = configSelector.bottom.toFloat()
+        val statusTop = statusText.top.toFloat()
+        val statusHeight = statusText.height.toFloat().takeIf { it > 0 } ?: (32f * density)
+
+        if (centerTop <= 0f || configBottom <= 0f) {
+            val screenHeight = resources.displayMetrics.heightPixels.toFloat()
+            return (screenHeight * 0.11f).coerceIn(60f * density, 130f * density)
+        }
+
+        val availableSpace = centerTop - configBottom
+        val marginFromButton = (availableSpace * 0.26f).coerceIn(20f * density, 72f * density)
+        val targetTop = centerTop - marginFromButton - statusHeight
+        val calculatedTransY = targetTop - statusTop
+
+        val minTransY = 36f * density
+        val maxTransY = (centerTop - statusTop - statusHeight - 16f * density).coerceAtLeast(minTransY)
+        return calculatedTransY.coerceIn(minTransY, maxTransY)
+    }
+
     private fun animateStatusPosition(down: Boolean) {
-        val targetY = if (down) 44f * resources.displayMetrics.density else 22f * resources.displayMetrics.density
+        val targetY = if (down) getIdleStatusTranslationY() else getRunningStatusTranslationY()
         statusText.animate()
             .translationY(targetY)
             .setDuration(320L)
@@ -1226,7 +1272,7 @@ class TunnelsFragment : BaseFragment() {
             uptimeText.visibility = View.VISIBLE
         }
         if (uptimeContainer.alpha > 0.05f) return
-        val targetY = 22f * resources.displayMetrics.density
+        val targetY = getRunningStatusTranslationY()
         uptimeContainer.translationY = targetY + (10f * resources.displayMetrics.density)
         uptimeContainer.animate().cancel()
         uptimeContainer.animate()

@@ -69,6 +69,18 @@ class FluxonProxyService : Service() {
         super.onCreate()
         runCatching { NativeBridge.ensureLoaded(applicationContext) }
         supervisor = NativeProcessSupervisor(applicationContext)
+        serviceScope.launch {
+            EventBus.events.collect { ev ->
+                if (ev is AppEvent.RefreshNotification && isProxyRunning) {
+                    val nm = getSystemService(NOTIFICATION_SERVICE) as? NotificationManager
+                    val notif = buildNotification(
+                        getString(R.string.app_name) + " — SOCKS5 ✓",
+                        "SOCKS5 127.0.0.1:$proxyPort"
+                    )
+                    nm?.notify(NOTIFICATION_ID, notif)
+                }
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -206,6 +218,7 @@ class FluxonProxyService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
+            .setLargeIcon(io.github.p1neapplexpress.openflux.util.AppIconManager.getNotificationLargeIcon(this))
             .setContentTitle(title)
             .setContentText(text)
             .setOngoing(true)

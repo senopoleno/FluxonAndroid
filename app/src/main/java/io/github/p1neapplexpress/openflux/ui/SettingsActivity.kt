@@ -25,6 +25,8 @@ import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.textfield.TextInputEditText
 import io.github.p1neapplexpress.openflux.BuildConfig
 import io.github.p1neapplexpress.openflux.R
+import io.github.p1neapplexpress.openflux.event.AppEvent
+import io.github.p1neapplexpress.openflux.event.EventBus
 import io.github.p1neapplexpress.openflux.util.AppIconManager
 import io.github.p1neapplexpress.openflux.util.AppSettings
 import io.github.p1neapplexpress.openflux.util.AppUpdateChecker
@@ -869,6 +871,7 @@ class SettingsActivity : AppCompatActivity() {
         fun selectIcon(iconKey: String) {
             AppIconManager.setAppIcon(this, iconKey)
             updateAppIconSummary()
+            EventBus.dispatch(AppEvent.RefreshNotification)
             dialog.dismiss()
         }
 

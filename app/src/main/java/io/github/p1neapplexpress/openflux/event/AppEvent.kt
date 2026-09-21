@@ -10,4 +10,5 @@ sealed interface AppEvent {
     data object WaitingForNetwork : AppEvent
     data class VpnConnected(val tunnelName: String? = null) : AppEvent
     data object VpnDisconnected : AppEvent
+    data object RefreshNotification : AppEvent
 }

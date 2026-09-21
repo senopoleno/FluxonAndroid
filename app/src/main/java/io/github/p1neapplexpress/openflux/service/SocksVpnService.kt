@@ -232,6 +232,11 @@ class SocksVpnService : android.net.VpnService() {
                             }
                         }
                     }
+                    is AppEvent.RefreshNotification -> {
+                        if (::notifications.isInitialized && vpn.isRunning.get()) {
+                            notifications.refresh()
+                        }
+                    }
                     else -> {}
                 }
             }

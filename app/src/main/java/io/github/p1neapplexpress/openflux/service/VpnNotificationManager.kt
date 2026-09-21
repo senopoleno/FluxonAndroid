@@ -36,6 +36,7 @@ import io.github.p1neapplexpress.openflux.event.EventBus
 
 import io.github.p1neapplexpress.openflux.ui.MainActivity
 
+import io.github.p1neapplexpress.openflux.util.AppIconManager
 import io.github.p1neapplexpress.openflux.util.AppSettings
 
 import java.util.Locale
@@ -253,6 +254,7 @@ class VpnNotificationManager(private val service: Service) {
             .setContentTitle(title)
             .setContentText(statusAndSpeed)
             .setSmallIcon(R.drawable.ic_notification)
+            .setLargeIcon(AppIconManager.getNotificationLargeIcon(service))
             .setOngoing(true)
             .setContentIntent(contentIntent)
             .addAction(R.drawable.ic_speed, service.getString(R.string.action_check_ping), checkPingPending)
@@ -265,6 +267,12 @@ class VpnNotificationManager(private val service: Service) {
 
         return builder.build()
 
+    }
+
+    fun refresh() {
+        val notif = buildNotification(service.getString(R.string.running))
+        val mgr = service.getSystemService(NotificationManager::class.java)
+        mgr?.notify(NOTIFICATION_ID, notif)
     }
 
     private fun formatSpeed(bytesPerSecond: Long): String = when {
