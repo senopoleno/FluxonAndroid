@@ -91,7 +91,6 @@ class NativeProcessSupervisor(private val context: Context) {
                     add("--debug")
                 }
                 var hasRole = false
-                var hasCodec = false
                 var hasInbound = false
                 var hasTunSocket = false
                 var hasTunMtu = false
@@ -102,9 +101,6 @@ class NativeProcessSupervisor(private val context: Context) {
                     }
                     if (arg == "--exit-node" || arg == "-exit-node" || arg == "--role=exit" || arg == "-role=exit") {
                         hasRole = true
-                    }
-                    if (arg == "--codec" || arg.startsWith("--codec=") || arg.startsWith("-codec=")) {
-                        hasCodec = true
                     }
                     if (arg == "--inbound" || arg.startsWith("--inbound=") || arg == "-inbound" || arg.startsWith("-inbound=") ||
                         arg == "--tun" || arg == "-tun" || arg == "--socks5-mode" || arg == "-socks5-mode") {
@@ -119,9 +115,6 @@ class NativeProcessSupervisor(private val context: Context) {
                 }
                 if (!hasRole) {
                     add("--role=client")
-                }
-                if (!hasCodec) {
-                    add("--codec=legacy")
                 }
                 if (!hasInbound) {
                     add("--inbound=tun")
