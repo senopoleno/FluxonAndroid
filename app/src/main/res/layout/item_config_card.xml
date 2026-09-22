@@ -21,19 +21,19 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingHorizontal="14dp"
+        android:paddingHorizontal="16dp"
         android:paddingVertical="12dp">
 
         <!-- Transport Icon Badge -->
         <FrameLayout
-            android:layout_width="42dp"
-            android:layout_height="42dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:background="@drawable/bg_setting_icon_badge">
 
             <ImageView
                 android:id="@+id/config_transport_icon"
-                android:layout_width="26dp"
-                android:layout_height="26dp"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
                 android:layout_gravity="center"
                 android:scaleType="fitCenter"
                 android:src="@drawable/yandex_docs"
@@ -46,7 +46,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="14dp"
+            android:layout_marginStart="12dp"
             android:layout_marginEnd="6dp"
             android:orientation="vertical">
 
@@ -72,8 +72,8 @@
 
                 <View
                     android:id="@+id/config_status_dot"
-                    android:layout_width="7dp"
-                    android:layout_height="7dp"
+                    android:layout_width="8dp"
+                    android:layout_height="8dp"
                     android:background="@drawable/bg_dropdown_dot"
                     android:layout_marginEnd="6dp" />
 
@@ -92,8 +92,8 @@
         <!-- Selection Checkmark -->
         <ImageView
             android:id="@+id/config_check_icon"
-            android:layout_width="22dp"
-            android:layout_height="22dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:layout_marginEnd="4dp"
             android:src="@drawable/ic_check"
             app:tint="@color/m3_primary"
@@ -101,12 +101,14 @@
             tools:visibility="visible"
             android:contentDescription="@null" />
 
-        <!-- 3-Dots More Options Button -->
+        <!-- 3-Dots More Options Button (48x48dp accessible touch target) -->
         <ImageView
             android:id="@+id/btn_config_more"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:padding="7dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:minWidth="48dp"
+            android:minHeight="48dp"
+            android:padding="12dp"
             android:src="@drawable/ic_more_vert"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:clickable="true"

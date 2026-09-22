@@ -4,17 +4,23 @@ import android.os.Bundle
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.widget.ImageView
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.materialswitch.MaterialSwitch
 import io.github.p1neapplexpress.openflux.R
 import io.github.p1neapplexpress.openflux.util.AppSettings
 import io.github.p1neapplexpress.openflux.util.ThemePreferences
 import io.github.p1neapplexpress.openflux.util.performAppHaptics
+import kotlinx.coroutines.launch
 
 class AppearanceActivity : AppCompatActivity() {
 
+    private val vm: AppearanceViewModel by viewModels()
     private lateinit var appSettings: AppSettings
     private lateinit var themePrefs: ThemePreferences
 
@@ -46,6 +52,36 @@ class AppearanceActivity : AppCompatActivity() {
         initViews()
         setupThemeToggle()
         setupSwitches()
+        observeViewModel()
+    }
+
+    private fun observeViewModel() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                vm.uiState.collect { state ->
+                    val checkedBtnId = when (state.themeMode) {
+                        ThemePreferences.THEME_LIGHT -> R.id.btn_theme_light
+                        ThemePreferences.THEME_DARK -> R.id.btn_theme_dark
+                        else -> R.id.btn_theme_system
+                    }
+                    if (themeToggleGroup.checkedButtonId != checkedBtnId) {
+                        themeToggleGroup.check(checkedBtnId)
+                    }
+                    if (switchSpeedGraph.isChecked != state.showSpeedGraph) {
+                        switchSpeedGraph.isChecked = state.showSpeedGraph
+                    }
+                    if (switchShowPing.isChecked != state.showPingInMainMenu) {
+                        switchShowPing.isChecked = state.showPingInMainMenu
+                    }
+                    if (switchMemoryMonitor.isChecked != state.showMemoryUsage) {
+                        switchMemoryMonitor.isChecked = state.showMemoryUsage
+                    }
+                    if (switchNotifySpeed.isChecked != state.showNotificationSpeed) {
+                        switchNotifySpeed.isChecked = state.showNotificationSpeed
+                    }
+                }
+            }
+        }
     }
 
     private fun setupTopBar() {
@@ -80,8 +116,7 @@ class AppearanceActivity : AppCompatActivity() {
                     else -> ThemePreferences.THEME_SYSTEM
                 }
                 if (newMode != themePrefs.themeMode) {
-                    themePrefs.themeMode = newMode
-                    themePrefs.applyTheme()
+                    vm.setThemeMode(newMode)
                     overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
                 }
             }
@@ -93,7 +128,7 @@ class AppearanceActivity : AppCompatActivity() {
         switchSpeedGraph.isChecked = appSettings.showSpeedGraph
         switchSpeedGraph.jumpDrawablesToCurrentState()
         switchSpeedGraph.setOnCheckedChangeListener { _, isChecked ->
-            appSettings.showSpeedGraph = isChecked
+            vm.setShowSpeedGraph(isChecked)
         }
         switchSpeedGraph.setOnClickListener {
             switchSpeedGraph.performAppHaptics()
@@ -107,7 +142,7 @@ class AppearanceActivity : AppCompatActivity() {
         switchShowPing.isChecked = appSettings.showPingInMainMenu
         switchShowPing.jumpDrawablesToCurrentState()
         switchShowPing.setOnCheckedChangeListener { _, isChecked ->
-            appSettings.showPingInMainMenu = isChecked
+            vm.setShowPing(isChecked)
         }
         switchShowPing.setOnClickListener {
             switchShowPing.performAppHaptics()
@@ -121,7 +156,7 @@ class AppearanceActivity : AppCompatActivity() {
         switchMemoryMonitor.isChecked = appSettings.showMemoryUsage
         switchMemoryMonitor.jumpDrawablesToCurrentState()
         switchMemoryMonitor.setOnCheckedChangeListener { _, isChecked ->
-            appSettings.showMemoryUsage = isChecked
+            vm.setShowMemoryUsage(isChecked)
         }
         switchMemoryMonitor.setOnClickListener {
             switchMemoryMonitor.performAppHaptics()
@@ -135,7 +170,7 @@ class AppearanceActivity : AppCompatActivity() {
         switchNotifySpeed.isChecked = appSettings.showNotificationSpeed
         switchNotifySpeed.jumpDrawablesToCurrentState()
         switchNotifySpeed.setOnCheckedChangeListener { _, isChecked ->
-            appSettings.showNotificationSpeed = isChecked
+            vm.setShowNotificationSpeed(isChecked)
         }
         switchNotifySpeed.setOnClickListener {
             switchNotifySpeed.performAppHaptics()

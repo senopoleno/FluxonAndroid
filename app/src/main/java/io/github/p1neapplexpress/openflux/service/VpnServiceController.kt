@@ -85,11 +85,27 @@ class VpnServiceController(private val service: VpnService) {
 
         val ipType = intent.getIntExtra(Constants.INTENT_IP_TYPE, AppSettings.IP_TYPE_AUTO)
 
+        val isNumericIp = { ip: String? ->
+            if (ip.isNullOrBlank()) false
+            else runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    android.net.InetAddresses.parseNumericAddress(ip) != null
+                } else {
+                    @Suppress("DEPRECATION")
+                    java.net.InetAddress.getByName(ip.filter { it.isDigit() || it == '.' || it == ':' }) != null
+                }
+            }.getOrDefault(false)
+        }
+
+        val safeDns = if (isNumericIp(dns)) dns else PRIMARY_DNS
+        val safeSecDns = if (isNumericIp(secDns)) secDns else SECONDARY_DNS
+
         val builder = service.Builder()
             .setMtu(mtu)
             .setSession(name)
-            .addDnsServer(dns)
-            .addDnsServer(secDns)
+
+        runCatching { builder.addDnsServer(safeDns) }
+        runCatching { builder.addDnsServer(safeSecDns) }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             builder.setBlocking(killSwitch)
@@ -99,6 +115,11 @@ class VpnServiceController(private val service: VpnService) {
             AppSettings.IP_TYPE_IPV4 -> {
                 builder.addAddress(VPN_IPV4_ADDR, VPN_IPV4_PREFIX)
                 Routes.addRoutes(service, builder, route, bypassLan)
+                // Blackhole route ::/0 to tun0 to prevent cleartext carrier bypass (CORE-12)
+                runCatching {
+                    builder.addAddress(VPN_IPV6_ADDR, VPN_IPV6_PREFIX)
+                        .addRoute("::", 0)
+                }
             }
             AppSettings.IP_TYPE_IPV6 -> {
                 builder.addAddress(VPN_IPV6_ADDR, VPN_IPV6_PREFIX)
@@ -110,12 +131,18 @@ class VpnServiceController(private val service: VpnService) {
                 if (ipv6) {
                     builder.addAddress(VPN_IPV6_ADDR, VPN_IPV6_PREFIX)
                         .addRoute("::", 0)
+                } else {
+                    // Blackhole route ::/0 to tun0 to prevent cleartext carrier bypass (CORE-12)
+                    runCatching {
+                        builder.addAddress(VPN_IPV6_ADDR, VPN_IPV6_PREFIX)
+                            .addRoute("::", 0)
+                    }
                 }
             }
         }
 
         // Use numeric parsing to avoid InetAddress.getByName() performing a DNS lookup on the calling thread
-        listOfNotNull(dns, secDns).forEach { server ->
+        listOfNotNull(safeDns, safeSecDns).forEach { server ->
             runCatching {
                 val addr = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                     android.net.InetAddresses.parseNumericAddress(server)
@@ -124,9 +151,7 @@ class VpnServiceController(private val service: VpnService) {
                     java.net.InetAddress.getByName(server.filter { it.isDigit() || it == '.' || it == ':' })
                 }
                 if (addr is java.net.Inet6Address) {
-                    if (ipType != AppSettings.IP_TYPE_IPV4 && (ipType == AppSettings.IP_TYPE_IPV6 || ipv6)) {
-                        builder.addRoute(addr, 128)
-                    }
+                    builder.addRoute(addr, 128)
                 } else {
                     if (ipType != AppSettings.IP_TYPE_IPV6) {
                         builder.addRoute(addr, 32)

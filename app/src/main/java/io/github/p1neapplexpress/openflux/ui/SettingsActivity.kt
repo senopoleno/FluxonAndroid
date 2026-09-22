@@ -13,11 +13,14 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
@@ -41,6 +44,7 @@ import java.util.UUID
 
 class SettingsActivity : AppCompatActivity() {
 
+    private val vm: SettingsViewModel by viewModels()
     private lateinit var appSettings: AppSettings
     private lateinit var themePrefs: ThemePreferences
     private lateinit var splitPrefs: SplitTunnelPreferences
@@ -127,17 +131,101 @@ class SettingsActivity : AppCompatActivity() {
         setupBackup()
         setupUpdates()
         setupAbout()
+        observeViewModel()
     }
 
     override fun onResume() {
         super.onResume()
-        updateSplitTunnelSummary()
-        updateDnsSummary()
-        updateMtuSummary()
-        updateIpTypeSummary()
-        updateLanguageSummary()
-        updateAppIconSummary()
-        updateBatteryOptStatus()
+        vm.refreshState()
+    }
+
+    private fun observeViewModel() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    vm.uiState.collect { state ->
+                        textSplitTunnelSummary.text = when {
+                            state.splitAppsCount == 0 && state.splitDomainsCount == 0 -> getString(R.string.settings_split_tunnel_none)
+                            else -> getString(R.string.split_summary_format, state.splitAppsCount, state.splitDomainsCount)
+                        }
+                        textDnsSummary.text = state.dnsSummary
+                        textMtuSummary.text = state.mtu.toString()
+                        textIpTypeSummary.text = when (state.ipType) {
+                            AppSettings.IP_TYPE_IPV4 -> getString(R.string.settings_ip_type_ipv4)
+                            AppSettings.IP_TYPE_IPV6 -> getString(R.string.settings_ip_type_ipv6)
+                            else -> getString(R.string.settings_ip_type_auto)
+                        }
+                        textLanguageSummary.text = when (state.language) {
+                            "ru" -> "Русский"
+                            "en" -> "English"
+                            else -> getString(R.string.settings_language_system)
+                        }
+                        textAppIconSummary.text = if (state.appIcon == AppIconManager.ICON_LIGHT) {
+                            getString(R.string.settings_icon_light)
+                        } else {
+                            getString(R.string.settings_icon_dark)
+                        }
+
+                        if (switchBypassLan.isChecked != state.bypassLan) {
+                            switchBypassLan.isChecked = state.bypassLan
+                        }
+                        if (switchHapticFeedback.isChecked != state.hapticFeedback) {
+                            switchHapticFeedback.isChecked = state.hapticFeedback
+                        }
+                        if (switchKillSwitch.isChecked != state.killSwitch) {
+                            switchKillSwitch.isChecked = state.killSwitch
+                        }
+                        if (switchHotspot.isChecked != state.shareHotspot) {
+                            switchHotspot.isChecked = state.shareHotspot
+                        }
+                        if (switchSocks5Auth.isChecked != state.socks5AuthEnabled) {
+                            switchSocks5Auth.isChecked = state.socks5AuthEnabled
+                        }
+                        val swProxyOnly = findViewById<MaterialSwitch?>(R.id.switch_proxy_only_mode)
+                        if (swProxyOnly != null && swProxyOnly.isChecked != state.proxyOnlyMode) {
+                            swProxyOnly.isChecked = state.proxyOnlyMode
+                        }
+                        if (switchFailover.isChecked != state.autoFailover) {
+                            switchFailover.isChecked = state.autoFailover
+                        }
+                        if (switchAutoBoot.isChecked != state.autoBoot) {
+                            switchAutoBoot.isChecked = state.autoBoot
+                        }
+                        if (switchAutoClearLogs.isChecked != state.autoClearLogs) {
+                            switchAutoClearLogs.isChecked = state.autoClearLogs
+                        }
+                        if (switchAutoUpdate.isChecked != state.autoUpdate) {
+                            switchAutoUpdate.isChecked = state.autoUpdate
+                        }
+
+                        val subBattery = findViewById<TextView>(R.id.text_battery_opt_subtitle)
+                        if (subBattery != null) {
+                            if (state.isBatteryOptimized) {
+                                subBattery.text = getString(R.string.battery_opt_disabled)
+                                subBattery.setTextColor(androidx.core.content.ContextCompat.getColor(this@SettingsActivity, R.color.colorSuccess))
+                            } else {
+                                subBattery.text = getString(R.string.battery_opt_enabled)
+                                subBattery.setTextColor(androidx.core.content.ContextCompat.getColor(this@SettingsActivity, R.color.text_secondary))
+                            }
+                        }
+                    }
+                }
+                launch {
+                    vm.events.collect { event ->
+                        when (event) {
+                            is SettingsEvent.ShowToast -> Toast.makeText(this@SettingsActivity, event.message, Toast.LENGTH_SHORT).show()
+                            is SettingsEvent.ShowToastRes -> Toast.makeText(this@SettingsActivity, event.resId, Toast.LENGTH_SHORT).show()
+                            is SettingsEvent.OpenKillSwitchSettings -> {
+                                Toast.makeText(this@SettingsActivity, R.string.settings_kill_switch_system, Toast.LENGTH_SHORT).show()
+                                try {
+                                    startActivity(Intent(Settings.ACTION_VPN_SETTINGS))
+                                } catch (_: Exception) {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private fun initViews() {
@@ -190,24 +278,21 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<View>(R.id.row_mtu).setOnClickListener {
             it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             MtuBottomSheetDialog(this, appSettings.mtu) { newMtu ->
-                appSettings.mtu = newMtu
-                updateMtuSummary()
+                vm.setMtu(newMtu)
             }.show()
         }
-        updateMtuSummary()
 
         // 4. IP Type
         findViewById<View>(R.id.row_ip_type).setOnClickListener {
             it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             showIpTypeBottomSheet()
         }
-        updateIpTypeSummary()
 
         // 5. Bypass LAN
         switchBypassLan.isChecked = appSettings.bypassLan
         switchBypassLan.jumpDrawablesToCurrentState()
         switchBypassLan.setOnCheckedChangeListener { _, isChecked ->
-            appSettings.bypassLan = isChecked
+            vm.toggleBypassLan(isChecked)
         }
         switchBypassLan.setOnClickListener {
             switchBypassLan.performAppHaptics()
@@ -229,7 +314,7 @@ class SettingsActivity : AppCompatActivity() {
         switchHapticFeedback.isChecked = appSettings.hapticFeedback
         switchHapticFeedback.jumpDrawablesToCurrentState()
         switchHapticFeedback.setOnCheckedChangeListener { _, isChecked ->
-            appSettings.hapticFeedback = isChecked
+            vm.toggleHapticFeedback(isChecked)
         }
         switchHapticFeedback.setOnClickListener {
             switchHapticFeedback.performAppHaptics()
@@ -259,13 +344,7 @@ class SettingsActivity : AppCompatActivity() {
         switchKillSwitch.isChecked = appSettings.killSwitch
         switchKillSwitch.jumpDrawablesToCurrentState()
         switchKillSwitch.setOnCheckedChangeListener { _, isChecked ->
-            appSettings.killSwitch = isChecked
-            if (isChecked) {
-                Toast.makeText(this, R.string.settings_kill_switch_system, Toast.LENGTH_SHORT).show()
-                try {
-                    startActivity(Intent(Settings.ACTION_VPN_SETTINGS))
-                } catch (_: Exception) { }
-            }
+            vm.toggleKillSwitch(isChecked)
         }
         switchKillSwitch.setOnClickListener {
             switchKillSwitch.performAppHaptics()
@@ -279,19 +358,9 @@ class SettingsActivity : AppCompatActivity() {
         switchHotspot.isChecked = appSettings.shareLanProxy
         switchHotspot.jumpDrawablesToCurrentState()
         switchHotspot.setOnCheckedChangeListener { _, isChecked ->
-            appSettings.shareLanProxy = isChecked
+            vm.toggleHotspot(isChecked)
             if (isChecked) {
-                val session = io.github.p1neapplexpress.openflux.util.LocalSocksSession.getActive()
-                io.github.p1neapplexpress.openflux.service.HotspotProxyBridge.start(
-                    lanPort = appSettings.lanProxyPort,
-                    targetLocalPort = session.port,
-                    authEnabled = appSettings.socks5AuthEnabled,
-                    username = session.username,
-                    password = session.password
-                )
                 showHotspotBottomSheet()
-            } else {
-                io.github.p1neapplexpress.openflux.service.HotspotProxyBridge.stop()
             }
         }
         switchHotspot.setOnClickListener {
@@ -306,7 +375,7 @@ class SettingsActivity : AppCompatActivity() {
         switchSocks5Auth.isChecked = appSettings.socks5AuthEnabled
         switchSocks5Auth.jumpDrawablesToCurrentState()
         switchSocks5Auth.setOnCheckedChangeListener { _, isChecked ->
-            appSettings.socks5AuthEnabled = isChecked
+            vm.toggleSocks5Auth(isChecked)
         }
         switchSocks5Auth.setOnClickListener {
             switchSocks5Auth.performAppHaptics()
@@ -322,14 +391,7 @@ class SettingsActivity : AppCompatActivity() {
             sw.isChecked = appSettings.proxyOnlyMode
             sw.jumpDrawablesToCurrentState()
             sw.setOnCheckedChangeListener { _, isChecked ->
-                appSettings.proxyOnlyMode = isChecked
-                if (isChecked) {
-                    Toast.makeText(
-                        this,
-                        "Режим прокси: VPN-иконка не будет показана. Перезапустите туннель.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
+                vm.toggleProxyOnlyMode(isChecked)
             }
             sw.setOnClickListener { sw.performAppHaptics() }
         }
@@ -342,7 +404,7 @@ class SettingsActivity : AppCompatActivity() {
         switchFailover.isChecked = appSettings.autoFailover
         switchFailover.jumpDrawablesToCurrentState()
         switchFailover.setOnCheckedChangeListener { _, isChecked ->
-            appSettings.autoFailover = isChecked
+            vm.toggleAutoFailover(isChecked)
         }
         switchFailover.setOnClickListener {
             switchFailover.performAppHaptics()
@@ -356,7 +418,7 @@ class SettingsActivity : AppCompatActivity() {
         switchAutoBoot.isChecked = appSettings.autoConnectOnBoot
         switchAutoBoot.jumpDrawablesToCurrentState()
         switchAutoBoot.setOnCheckedChangeListener { _, isChecked ->
-            appSettings.autoConnectOnBoot = isChecked
+            vm.toggleAutoBoot(isChecked)
         }
         switchAutoBoot.setOnClickListener {
             switchAutoBoot.performAppHaptics()
@@ -434,7 +496,7 @@ class SettingsActivity : AppCompatActivity() {
         switchAutoClearLogs.isChecked = appSettings.autoClearLogs
         switchAutoClearLogs.jumpDrawablesToCurrentState()
         switchAutoClearLogs.setOnCheckedChangeListener { _, isChecked ->
-            appSettings.autoClearLogs = isChecked
+            vm.toggleAutoClearLogs(isChecked)
         }
         switchAutoClearLogs.setOnClickListener {
             switchAutoClearLogs.performAppHaptics()
@@ -461,7 +523,7 @@ class SettingsActivity : AppCompatActivity() {
         switchAutoUpdate.isChecked = appSettings.autoUpdateCheck
         switchAutoUpdate.jumpDrawablesToCurrentState()
         switchAutoUpdate.setOnCheckedChangeListener { _, isChecked ->
-            appSettings.autoUpdateCheck = isChecked
+            vm.toggleAutoUpdate(isChecked)
         }
         switchAutoUpdate.setOnClickListener {
             switchAutoUpdate.performAppHaptics()
@@ -617,20 +679,17 @@ class SettingsActivity : AppCompatActivity() {
 
         cardAuto?.setOnClickListener {
             it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
-            appSettings.ipType = AppSettings.IP_TYPE_AUTO
-            updateIpTypeSummary()
+            vm.setIpType(AppSettings.IP_TYPE_AUTO)
             dialog.dismiss()
         }
         cardIpv4?.setOnClickListener {
             it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
-            appSettings.ipType = AppSettings.IP_TYPE_IPV4
-            updateIpTypeSummary()
+            vm.setIpType(AppSettings.IP_TYPE_IPV4)
             dialog.dismiss()
         }
         cardIpv6?.setOnClickListener {
             it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
-            appSettings.ipType = AppSettings.IP_TYPE_IPV6
-            updateIpTypeSummary()
+            vm.setIpType(AppSettings.IP_TYPE_IPV6)
             dialog.dismiss()
         }
         btnCancel?.setOnClickListener {

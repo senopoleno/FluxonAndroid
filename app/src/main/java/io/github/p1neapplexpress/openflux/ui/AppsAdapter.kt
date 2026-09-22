@@ -6,6 +6,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.checkbox.MaterialCheckBox
 import io.github.p1neapplexpress.openflux.R
@@ -14,15 +16,34 @@ import io.github.p1neapplexpress.openflux.util.performAppHaptics
 
 class AppsAdapter(
     private val onAppSelectionChanged: (AppItem) -> Unit
-) : RecyclerView.Adapter<AppsAdapter.AppViewHolder>() {
+) : ListAdapter<AppItem, AppsAdapter.AppViewHolder>(AppDiffCallback()) {
+
+    companion object {
+        const val PAYLOAD_CHECKED = "payload_checked"
+    }
+
+    private class AppDiffCallback : DiffUtil.ItemCallback<AppItem>() {
+        override fun areItemsTheSame(oldItem: AppItem, newItem: AppItem): Boolean =
+            oldItem.packageName == newItem.packageName
+
+        override fun areContentsTheSame(oldItem: AppItem, newItem: AppItem): Boolean =
+            oldItem.name == newItem.name && oldItem.isSelected == newItem.isSelected
+
+        override fun getChangePayload(oldItem: AppItem, newItem: AppItem): Any? {
+            return if (oldItem.isSelected != newItem.isSelected && oldItem.name == newItem.name) {
+                PAYLOAD_CHECKED
+            } else {
+                null
+            }
+        }
+    }
 
     private var allApps: List<AppItem> = emptyList()
-    private var displayedApps: MutableList<AppItem> = mutableListOf()
     private var currentQuery: String = ""
 
     var onListFiltered: ((count: Int) -> Unit)? = null
 
-    fun submitList(apps: List<AppItem>) {
+    fun submitApps(apps: List<AppItem>) {
         allApps = ArrayList(apps)
         applyFilter()
     }
@@ -33,23 +54,19 @@ class AppsAdapter(
     }
 
     private fun applyFilter() {
-        displayedApps.clear()
-        if (currentQuery.isEmpty()) {
-            displayedApps.addAll(allApps)
+        val filtered = if (currentQuery.isEmpty()) {
+            allApps
         } else {
-            for (app in allApps) {
-                if (app.name.lowercase().contains(currentQuery) ||
-                    app.packageName.lowercase().contains(currentQuery)
-                ) {
-                    displayedApps.add(app)
-                }
+            allApps.filter {
+                it.name.lowercase().contains(currentQuery) ||
+                it.packageName.lowercase().contains(currentQuery)
             }
         }
-        notifyDataSetChanged()
-        onListFiltered?.invoke(displayedApps.size)
+        submitList(filtered)
+        onListFiltered?.invoke(filtered.size)
     }
 
-    fun getDisplayedApps(): List<AppItem> = displayedApps
+    fun getDisplayedApps(): List<AppItem> = currentList
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): AppViewHolder {
         val view = LayoutInflater.from(parent.context)
@@ -58,10 +75,16 @@ class AppsAdapter(
     }
 
     override fun onBindViewHolder(holder: AppViewHolder, position: Int) {
-        holder.bind(displayedApps[position])
+        holder.bind(getItem(position))
     }
 
-    override fun getItemCount(): Int = displayedApps.size
+    override fun onBindViewHolder(holder: AppViewHolder, position: Int, payloads: MutableList<Any>) {
+        if (payloads.contains(PAYLOAD_CHECKED)) {
+            holder.bindChecked(getItem(position))
+        } else {
+            super.onBindViewHolder(holder, position, payloads)
+        }
+    }
 
     inner class AppViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val icon: ImageView = itemView.findViewById(R.id.app_icon)
@@ -77,7 +100,7 @@ class AppsAdapter(
             } else {
                 icon.setImageResource(R.mipmap.ic_launcher_round)
             }
-            checkBox.isChecked = item.isSelected
+            bindChecked(item)
 
             itemView.setOnClickListener {
                 it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -85,6 +108,10 @@ class AppsAdapter(
                 checkBox.isChecked = item.isSelected
                 onAppSelectionChanged(item)
             }
+        }
+
+        fun bindChecked(item: AppItem) {
+            checkBox.isChecked = item.isSelected
         }
     }
 }

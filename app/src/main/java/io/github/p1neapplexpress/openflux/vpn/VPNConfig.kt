@@ -115,11 +115,20 @@ object TunnelEndpointHelper {
         if (transportType == "yandex" || transportType == "ydocs" || transportType == "vyandex") {
             return Pair("docs.yandex.ru", 443)
         }
+        if (transportType == "mailru") {
+            return Pair("docs.mail.ru", 443)
+        }
         return Pair("1.1.1.1", 443)
     }
 
     private fun argValue(payload: List<String>, arg: String): String {
-        val idx = payload.indexOf(arg)
+        val eqPrefix = "$arg="
+        for (item in payload) {
+            if (item.startsWith(eqPrefix, ignoreCase = true)) {
+                return item.substring(eqPrefix.length).trim('"', '\'')
+            }
+        }
+        val idx = payload.indexOfFirst { it.equals(arg, ignoreCase = true) }
         return if (idx != -1 && idx + 1 < payload.size) payload[idx + 1] else ""
     }
 }

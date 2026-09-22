@@ -12,6 +12,10 @@ import android.widget.Toast
 import androidx.core.view.isVisible
 import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.activityViewModels
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.textfield.TextInputLayout
 import io.github.p1neapplexpress.openflux.R
@@ -19,6 +23,7 @@ import io.github.p1neapplexpress.openflux.data.TransportType
 import io.github.p1neapplexpress.openflux.data.Tunnel
 import io.github.p1neapplexpress.openflux.event.AppEvent
 import io.github.p1neapplexpress.openflux.util.performAppHaptics
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import java.io.File
 
@@ -37,6 +42,7 @@ class AddTunFragment : BaseFragment() {
     }
 
     private val vm: TunnelsViewModel by activityViewModels()
+    private val addEditVm: AddEditTunnelViewModel by viewModels()
     private var transport = TransportType.yandex
     private var editing: Tunnel? = null
 
@@ -46,6 +52,7 @@ class AddTunFragment : BaseFragment() {
         if (raw != null) {
             editing = runCatching { Json.decodeFromString(Tunnel.serializer(), raw) }.getOrNull()
         }
+        addEditVm.initWithTunnel(editing)
     }
 
     override fun onCreateView(i: LayoutInflater, c: ViewGroup?, s: Bundle?) =
@@ -177,146 +184,68 @@ class AddTunFragment : BaseFragment() {
             it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             showTransportBottomSheet(transport) { selected ->
                 updateTransportUi(selected)
+                addEditVm.setTransport(selected)
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    addEditVm.formState.collect { state ->
+                        save.isEnabled = !state.isSaving
+                    }
+                }
+                launch {
+                    addEditVm.events.collect { event ->
+                        when (event) {
+                            is AddEditEvent.Saved -> {
+                                if (event.oldTunnel != null) {
+                                    vm.updateTunnel(event.oldTunnel, event.newTunnel)
+                                    Toast.makeText(requireContext(), R.string.config_saved, Toast.LENGTH_SHORT).show()
+                                } else {
+                                    vm.addTunnel(event.newTunnel)
+                                }
+                                requireActivity().onBackPressedDispatcher.onBackPressed()
+                            }
+                            is AddEditEvent.ValidationError -> {
+                                when (event.field) {
+                                    AddEditEvent.FieldError.NAME -> {
+                                        nameContainer.error = getString(event.messageRes)
+                                        name.requestFocus()
+                                    }
+                                    AddEditEvent.FieldError.URL -> {
+                                        yandexContainer.error = getString(event.messageRes)
+                                        docUrl.requestFocus()
+                                    }
+                                    AddEditEvent.FieldError.TOKEN -> {
+                                        maxTokenContainer.error = getString(event.messageRes)
+                                        maxToken.requestFocus()
+                                    }
+                                    AddEditEvent.FieldError.UID -> {
+                                        maxUserIdContainer.error = getString(event.messageRes)
+                                        maxUid.requestFocus()
+                                    }
+                                    AddEditEvent.FieldError.KEY -> {
+                                        encryptionKeyContainer.error = getString(event.messageRes)
+                                        encryptionKey.requestFocus()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
         save.setOnClickListener {
             it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
-            val n = name.text?.toString()?.trim().orEmpty()
-            if (n.isEmpty()) {
-                nameContainer.error = getString(R.string.name_required)
-                name.requestFocus()
-                return@setOnClickListener
-            }
-            nameContainer.clearError()
-
-            val url = docUrl.text?.toString()?.trim().orEmpty()
-            val token = maxToken.text?.toString()?.trim().orEmpty()
-            val uidStr = maxUid.text?.toString()?.trim().orEmpty()
-
-            when (transport) {
-                TransportType.yandex, TransportType.vyandex -> {
-                    val urls = url.split(Regex("[,\\s\\n\\r]+")).map { it.trim() }.filter { it.isNotEmpty() }
-                    if (urls.isEmpty()) {
-                        yandexContainer.error = getString(R.string.err_invalid_url)
-                        docUrl.requestFocus()
-                        return@setOnClickListener
-                    }
-                    for (u in urls) {
-                        if (!u.startsWith("http://", ignoreCase = true) && !u.startsWith("https://", ignoreCase = true)) {
-                            yandexContainer.error = getString(R.string.err_invalid_url)
-                            docUrl.requestFocus()
-                            return@setOnClickListener
-                        }
-                        val host = runCatching { java.net.URI(u).host }.getOrNull()?.lowercase()
-                        if (host.isNullOrEmpty() || !host.contains(".")) {
-                            yandexContainer.error = getString(R.string.err_invalid_url)
-                            docUrl.requestFocus()
-                            return@setOnClickListener
-                        }
-                        val isYandexDomain = host.contains("yandex.") || host.contains("yadi.sk") || host.contains("ya.ru")
-                        if (!isYandexDomain) {
-                            yandexContainer.error = getString(R.string.err_invalid_yandex_url)
-                            docUrl.requestFocus()
-                            return@setOnClickListener
-                        }
-                    }
-                    yandexContainer.clearError()
-                }
-                TransportType.max -> {
-                    if (token.isEmpty()) {
-                        maxTokenContainer.error = getString(R.string.err_max_token_required)
-                        maxToken.requestFocus()
-                        return@setOnClickListener
-                    }
-                    maxTokenContainer.clearError()
-
-                    val uidLong = uidStr.toLongOrNull()
-                    if (uidLong == null || uidLong <= 0) {
-                        maxUserIdContainer.error = getString(R.string.err_max_uid_required)
-                        maxUid.requestFocus()
-                        return@setOnClickListener
-                    }
-                    maxUserIdContainer.clearError()
-                }
-                TransportType.cups -> {
-                    if (url.isEmpty()) {
-                        yandexContainer.error = getString(R.string.err_cups_url_required)
-                        docUrl.requestFocus()
-                        return@setOnClickListener
-                    }
-                    if (!url.startsWith("http://", ignoreCase = true) && !url.startsWith("https://", ignoreCase = true)) {
-                        yandexContainer.error = getString(R.string.err_invalid_url)
-                        docUrl.requestFocus()
-                        return@setOnClickListener
-                    }
-                    val host = runCatching { java.net.URI(url).host }.getOrNull()?.lowercase()
-                    if (host.isNullOrEmpty() || !host.contains(".")) {
-                        yandexContainer.error = getString(R.string.err_invalid_url)
-                        docUrl.requestFocus()
-                        return@setOnClickListener
-                    }
-                    if (!host.contains("cups.online")) {
-                        yandexContainer.error = getString(R.string.err_cups_domain_invalid)
-                        docUrl.requestFocus()
-                        return@setOnClickListener
-                    }
-                    yandexContainer.clearError()
-                }
-                TransportType.mailru -> {
-                    if (url.isEmpty()) {
-                        yandexContainer.error = getString(R.string.err_mailru_url_required)
-                        docUrl.requestFocus()
-                        return@setOnClickListener
-                    }
-                    if (!url.startsWith("http://", ignoreCase = true) && !url.startsWith("https://", ignoreCase = true)) {
-                        yandexContainer.error = getString(R.string.err_invalid_url)
-                        docUrl.requestFocus()
-                        return@setOnClickListener
-                    }
-                    val host = runCatching { java.net.URI(url).host }.getOrNull()?.lowercase()
-                    if (host.isNullOrEmpty() || !host.contains(".")) {
-                        yandexContainer.error = getString(R.string.err_invalid_url)
-                        docUrl.requestFocus()
-                        return@setOnClickListener
-                    }
-                    val isMailRuDomain = host.contains("mail.ru") || host.contains("my.mail.ru") || host.contains("cloud.mail.ru")
-                    if (!isMailRuDomain) {
-                        yandexContainer.error = getString(R.string.err_mailru_domain_invalid)
-                        docUrl.requestFocus()
-                        return@setOnClickListener
-                    }
-                    yandexContainer.clearError()
-                }
-            }
-
-            val encKey = encryptionKey.text?.toString()?.trim().orEmpty()
-            if (encKey.isNotEmpty() && encKey.length < 16) {
-                encryptionKeyContainer.error = getString(R.string.err_encryption_key_short)
-                encryptionKey.requestFocus()
-                return@setOnClickListener
-            }
-            encryptionKeyContainer.clearError()
-
-            val newId = editing?.id ?: System.currentTimeMillis()
-            val newTunnel = createTunnel(
-                id = newId,
-                name = n,
-                docUrl = url,
-                maxToken = token,
-                maxUid = uidStr,
-                encKey = encKey,
-            ) ?: return@setOnClickListener
-
-            val old = editing
-            if (old != null) {
-                vm.updateTunnel(old, newTunnel)
-                Toast.makeText(requireContext(), R.string.config_saved, Toast.LENGTH_SHORT).show()
-            } else {
-                vm.addTunnel(newTunnel)
-            }
-
-            requireActivity().onBackPressedDispatcher.onBackPressed()
+            addEditVm.validateAndSave(
+                name = name.text?.toString().orEmpty(),
+                docUrl = docUrl.text?.toString().orEmpty(),
+                maxToken = maxToken.text?.toString().orEmpty(),
+                maxUid = maxUid.text?.toString().orEmpty(),
+                encryptionKey = encryptionKey.text?.toString().orEmpty()
+            )
         }
     }
 
@@ -354,115 +283,6 @@ class AddTunFragment : BaseFragment() {
     private fun argValue(payload: List<String>, key: String): String {
         val idx = payload.indexOf(key)
         return if (idx >= 0 && idx + 1 < payload.size) payload[idx + 1] else ""
-    }
-
-    private fun createTunnel(
-        id: Long,
-        name: String,
-        docUrl: String,
-        maxToken: String,
-        maxUid: String,
-        encKey: String = "",
-    ): Tunnel? {
-        when (transport) {
-            TransportType.yandex, TransportType.vyandex, TransportType.cups, TransportType.mailru -> {
-                if (docUrl.isEmpty()) return null
-            }
-            TransportType.max -> {
-                if (maxToken.isEmpty() || maxUid.isEmpty()) return null
-            }
-        }
-
-        val keyFile = if (encKey.isNotEmpty()) {
-            val f = File(requireContext().filesDir, "key_${id}.txt")
-            runCatching {
-                requireContext().openFileOutput(f.name, android.content.Context.MODE_PRIVATE).use { fos ->
-                    fos.write(encKey.toByteArray(java.nio.charset.StandardCharsets.UTF_8))
-                    fos.flush()
-                    fos.fd.sync()
-                }
-                f.setReadable(true, true)
-                f.setWritable(true, true)
-            }
-            f
-        } else {
-            val f = File(requireContext().filesDir, "key_${id}.txt")
-            runCatching { f.delete() }
-            null
-        }
-
-        val payload = when (transport) {
-            TransportType.yandex -> {
-                val urls = docUrl.split(Regex("[,\\s\\n\\r]+")).map { it.trim() }.filter { it.isNotEmpty() }
-                buildList {
-                    add("--role=client"); add("--transport"); add("yandex")
-                    if (urls.size > 1) {
-                        add("--urls"); add(urls.joinToString(","))
-                        add("--url"); add(urls.first())
-                    } else if (urls.size == 1) {
-                        add("--url"); add(urls.first())
-                    }
-                    keyFile?.let {
-                        add("--encryption-key-file")
-                        add(it.absolutePath)
-                    }
-                }
-            }
-            TransportType.vyandex -> {
-                val urls = docUrl.split(Regex("[,\\s\\n\\r]+")).map { it.trim() }.filter { it.isNotEmpty() }
-                buildList {
-                    add("--role=client"); add("--transport"); add("vyandex")
-                    if (urls.size > 1) {
-                        add("--urls"); add(urls.joinToString(","))
-                        add("--url"); add(urls.first())
-                    } else if (urls.size == 1) {
-                        add("--url"); add(urls.first())
-                    }
-                    keyFile?.let {
-                        add("--encryption-key-file")
-                        add(it.absolutePath)
-                    }
-                }
-            }
-            TransportType.max -> {
-                buildList {
-                    add("--role=client"); add("--transport"); add("oneme")
-                    add("--maxToken"); add(maxToken)
-                    add("--maxUid"); add(maxUid)
-                    keyFile?.let {
-                        add("--encryption-key-file")
-                        add(it.absolutePath)
-                    }
-                }
-            }
-            TransportType.cups -> {
-                buildList {
-                    add("--role=client"); add("--transport"); add("cupsonline")
-                    add("--url"); add(docUrl)
-                    keyFile?.let {
-                        add("--encryption-key-file")
-                        add(it.absolutePath)
-                    }
-                }
-            }
-            TransportType.mailru -> {
-                buildList {
-                    add("--role=client"); add("--transport"); add("mailru")
-                    add("--url"); add(docUrl)
-                    keyFile?.let {
-                        add("--encryption-key-file")
-                        add(it.absolutePath)
-                    }
-                }
-            }
-        }
-        return Tunnel(
-            id = id,
-            name = name,
-            transportType = transport.name,
-            transportConnPayload = payload,
-            encryptionKey = if (encKey.isEmpty()) "" else encKey,
-        )
     }
 
     override fun onNewEvent(ev: AppEvent) = Unit

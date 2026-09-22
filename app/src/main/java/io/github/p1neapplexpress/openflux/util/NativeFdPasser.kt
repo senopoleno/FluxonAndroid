@@ -20,6 +20,10 @@ object NativeFdPasser {
         maxRetries: Int = 50,
         delayMs: Long = 200L,
     ): Boolean {
+        if (!fd.valid()) {
+            Logx.e(TAG, "Cannot pass invalid FileDescriptor")
+            return false
+        }
         val abstractName = socketName.removePrefix("@")
         // Initial grace period to allow the newly spawned daemon to start listening on abstract socket
         try {

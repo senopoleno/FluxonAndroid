@@ -16,6 +16,8 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.FileProvider
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.lifecycleScope
 import io.github.p1neapplexpress.openflux.R
 import io.github.p1neapplexpress.openflux.data.Tunnel
 import io.github.p1neapplexpress.openflux.util.QrGenerator
@@ -73,17 +75,19 @@ object QrShareDialog {
 
         view.findViewById<View>(R.id.btn_share_qr).setOnClickListener {
             it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
-            CoroutineScope(Dispatchers.IO).launch {
+            val appContext = context.applicationContext
+            val scope = (context as? LifecycleOwner)?.lifecycleScope ?: CoroutineScope(Dispatchers.IO)
+            scope.launch(Dispatchers.IO) {
                 try {
-                    val imagesDir = File(context.cacheDir, "shared_images").apply { mkdirs() }
+                    val imagesDir = File(appContext.cacheDir, "shared_images").apply { mkdirs() }
                     val imageFile = File(imagesDir, "qr_${tunnel.id}.png")
                     FileOutputStream(imageFile).use { fos ->
                         qrBitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
                     }
 
                     val uri = FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
+                        appContext,
+                        "${appContext.packageName}.fileprovider",
                         imageFile
                     )
 
@@ -95,15 +99,16 @@ object QrShareDialog {
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
 
-                    val chooser = Intent.createChooser(shareIntent, context.getString(R.string.action_share_qr)).apply {
+                    val chooser = Intent.createChooser(shareIntent, appContext.getString(R.string.action_share_qr)).apply {
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
                     withContext(Dispatchers.Main) {
-                        context.startActivity(chooser)
+                        appContext.startActivity(chooser)
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, context.getString(R.string.qr_save_error, e.localizedMessage ?: "Unknown error"), Toast.LENGTH_SHORT).show()
+                        Toast.makeText(appContext, appContext.getString(R.string.qr_save_error, e.localizedMessage ?: "Unknown error"), Toast.LENGTH_SHORT).show()
                     }
                 }
             }

@@ -42,6 +42,10 @@ import androidx.transition.TransitionSet
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.ListAdapter
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -498,7 +502,7 @@ class TunnelsFragment : BaseFragment() {
         val btnClose = sheetView.findViewById<View>(R.id.btn_close_configs)
         val searchContainer = sheetView.findViewById<TextInputLayout>(R.id.search_configs_container)
         val searchInput = sheetView.findViewById<TextInputEditText>(R.id.search_configs_input)
-        val itemsContainer = sheetView.findViewById<LinearLayout>(R.id.configs_items_container)
+        val configsRecycler = sheetView.findViewById<RecyclerView>(R.id.configs_recycler)
         val emptyState = sheetView.findViewById<View>(R.id.configs_empty_state)
         val btnAddBottom = sheetView.findViewById<View>(R.id.btn_add_config_bottom)
 
@@ -513,25 +517,22 @@ class TunnelsFragment : BaseFragment() {
             dialog.dismiss()
         }
 
-        val rowDots = mutableMapOf<Long, View>()
-        var currentFilter = ""
-
-        fun tintDot(dot: View, health: TunnelHealth) {
-            val ctx = context ?: return
-            val colorRes = when (health) {
-                TunnelHealth.AVAILABLE -> R.color.state_running
-                TunnelHealth.UNAVAILABLE -> R.color.state_error
-                TunnelHealth.CHECKING -> R.color.state_connecting
-                TunnelHealth.UNKNOWN -> R.color.state_idle
+        val adapter = ConfigsAdapter(
+            onSelect = { tunnel ->
+                vm.selectTunnel(tunnel)
+                dialog.dismiss()
+            },
+            onMore = { anchor, tunnel ->
+                showItemContextMenu(anchor, tunnel)
             }
-            dot.background?.setTint(ContextCompat.getColor(ctx, colorRes))
-        }
+        )
+        configsRecycler.layoutManager = LinearLayoutManager(requireContext())
+        configsRecycler.adapter = adapter
+
+        var currentFilter = ""
 
         fun populateList(filterQuery: String = currentFilter) {
             currentFilter = filterQuery
-            itemsContainer.removeAllViews()
-            rowDots.clear()
-
             val allTunnels = vm.tunnels.value.map { it.tunnel }
             subtitleView.text = getString(R.string.total_configs_format, allTunnels.size)
 
@@ -548,90 +549,22 @@ class TunnelsFragment : BaseFragment() {
 
             if (filtered.isEmpty()) {
                 emptyState.isVisible = true
+                adapter.submitList(emptyList())
                 return
             } else {
                 emptyState.isVisible = false
             }
 
             val selectedId = vm.selectedTunnelId
-
-            for (tunnel in filtered) {
-                val card = layoutInflater.inflate(R.layout.item_config_card, itemsContainer, false) as MaterialCardView
-                val iconView = card.findViewById<ImageView>(R.id.config_transport_icon)
-                val nameView = card.findViewById<TextView>(R.id.config_name)
-                val transportLabel = card.findViewById<TextView>(R.id.config_transport_label)
-                val dot = card.findViewById<View>(R.id.config_status_dot)
-                val checkIcon = card.findViewById<ImageView>(R.id.config_check_icon)
-                val btnMore = card.findViewById<ImageView>(R.id.btn_config_more)
-
-                val isSelected = tunnel.id == selectedId
-
-                nameView.text = tunnel.name
-
-                when (TransportType.from(tunnel.transportType)) {
-                    TransportType.yandex -> {
-                        iconView.imageTintList = null
-                        iconView.setImageResource(R.drawable.yandex_docs)
-                        transportLabel.text = getString(R.string.yandex_docs_backend)
-                    }
-                    TransportType.vyandex -> {
-                        iconView.imageTintList = null
-                        iconView.setImageResource(R.drawable.volga)
-                        transportLabel.text = getString(R.string.vyandex_backend)
-                    }
-                    TransportType.max -> {
-                        iconView.setImageResource(R.drawable.max_msg)
-                        iconView.imageTintList = ContextCompat.getColorStateList(requireContext(), R.color.text_primary)
-                        transportLabel.text = getString(R.string.max_messenger_backend)
-                    }
-                    TransportType.cups -> {
-                        iconView.imageTintList = null
-                        iconView.setImageResource(R.drawable.ic_cups)
-                        transportLabel.text = getString(R.string.cups_backend)
-                    }
-                    TransportType.mailru -> {
-                        iconView.imageTintList = null
-                        iconView.setImageResource(R.drawable.ic_mailru)
-                        transportLabel.text = getString(R.string.mailru_backend)
-                    }
-                }
-
-                if (isSelected) {
-                    card.setStrokeColor(ContextCompat.getColor(requireContext(), R.color.m3_primary))
-                    card.strokeWidth = (1.5f * resources.displayMetrics.density).toInt()
-                    card.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.m3_surface_container_high))
-                    checkIcon.isVisible = true
-                    nameView.setTypeface(null, Typeface.BOLD)
-                } else {
-                    card.setStrokeColor(ContextCompat.getColor(requireContext(), R.color.m3_outline_variant))
-                    card.strokeWidth = (1f * resources.displayMetrics.density).toInt()
-                    card.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.m3_surface_container))
-                    checkIcon.isVisible = false
-                    nameView.setTypeface(null, Typeface.NORMAL)
-                }
-
-                tintDot(dot, vm.getTunnelHealth(tunnel.id))
-                rowDots[tunnel.id] = dot
-
-                card.setOnClickListener {
-                    it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
-                    vm.selectTunnel(tunnel)
-                    dialog.dismiss()
-                }
-
-                btnMore.setOnClickListener {
-                    it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
-                    showItemContextMenu(it, tunnel)
-                }
-
-                card.setOnLongClickListener {
-                    it.performAppHaptics(HapticFeedbackConstants.LONG_PRESS)
-                    showItemContextMenu(btnMore, tunnel)
-                    true
-                }
-
-                itemsContainer.addView(card)
+            val healthMap = vm.healthMap.value
+            val items = filtered.map { tunnel ->
+                TunnelConfigItem(
+                    tunnel = tunnel,
+                    isSelected = tunnel.id == selectedId,
+                    health = healthMap[tunnel.id] ?: vm.getTunnelHealth(tunnel.id)
+                )
             }
+            adapter.submitList(items)
         }
 
         populateList()
@@ -648,11 +581,8 @@ class TunnelsFragment : BaseFragment() {
 
         val sheetCollectorsJob = viewLifecycleOwner.lifecycleScope.launch {
             launch {
-                vm.healthMap.collect { map ->
-                    for ((id, d) in rowDots) {
-                        val h = map[id] ?: vm.getTunnelHealth(id)
-                        tintDot(d, h)
-                    }
+                vm.healthMap.collect {
+                    populateList()
                 }
             }
             launch {
@@ -669,6 +599,114 @@ class TunnelsFragment : BaseFragment() {
         }
 
         dialog.show()
+    }
+
+    data class TunnelConfigItem(
+        val tunnel: Tunnel,
+        val isSelected: Boolean,
+        val health: TunnelHealth
+    )
+
+    private class TunnelConfigDiffCallback : DiffUtil.ItemCallback<TunnelConfigItem>() {
+        override fun areItemsTheSame(oldItem: TunnelConfigItem, newItem: TunnelConfigItem): Boolean =
+            oldItem.tunnel.id == newItem.tunnel.id
+
+        override fun areContentsTheSame(oldItem: TunnelConfigItem, newItem: TunnelConfigItem): Boolean =
+            oldItem == newItem
+    }
+
+    private class ConfigsAdapter(
+        private val onSelect: (Tunnel) -> Unit,
+        private val onMore: (View, Tunnel) -> Unit
+    ) : ListAdapter<TunnelConfigItem, ConfigsAdapter.ConfigViewHolder>(TunnelConfigDiffCallback()) {
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ConfigViewHolder {
+            val v = LayoutInflater.from(parent.context).inflate(R.layout.item_config_card, parent, false) as MaterialCardView
+            return ConfigViewHolder(v)
+        }
+
+        override fun onBindViewHolder(holder: ConfigViewHolder, position: Int) {
+            holder.bind(getItem(position))
+        }
+
+        inner class ConfigViewHolder(private val card: MaterialCardView) : RecyclerView.ViewHolder(card) {
+            private val iconView = card.findViewById<ImageView>(R.id.config_transport_icon)
+            private val nameView = card.findViewById<TextView>(R.id.config_name)
+            private val transportLabel = card.findViewById<TextView>(R.id.config_transport_label)
+            private val dot = card.findViewById<View>(R.id.config_status_dot)
+            private val checkIcon = card.findViewById<ImageView>(R.id.config_check_icon)
+            private val btnMore = card.findViewById<ImageView>(R.id.btn_config_more)
+
+            fun bind(item: TunnelConfigItem) {
+                val tunnel = item.tunnel
+                nameView.text = tunnel.name
+
+                when (TransportType.from(tunnel.transportType)) {
+                    TransportType.yandex -> {
+                        iconView.imageTintList = null
+                        iconView.setImageResource(R.drawable.yandex_docs)
+                        transportLabel.text = card.context.getString(R.string.yandex_docs_backend)
+                    }
+                    TransportType.vyandex -> {
+                        iconView.imageTintList = null
+                        iconView.setImageResource(R.drawable.volga)
+                        transportLabel.text = card.context.getString(R.string.vyandex_backend)
+                    }
+                    TransportType.max -> {
+                        iconView.setImageResource(R.drawable.max_msg)
+                        iconView.imageTintList = ContextCompat.getColorStateList(card.context, R.color.text_primary)
+                        transportLabel.text = card.context.getString(R.string.max_messenger_backend)
+                    }
+                    TransportType.cups -> {
+                        iconView.imageTintList = null
+                        iconView.setImageResource(R.drawable.ic_cups)
+                        transportLabel.text = card.context.getString(R.string.cups_backend)
+                    }
+                    TransportType.mailru -> {
+                        iconView.imageTintList = null
+                        iconView.setImageResource(R.drawable.ic_mailru)
+                        transportLabel.text = card.context.getString(R.string.mailru_backend)
+                    }
+                }
+
+                val density = card.resources.displayMetrics.density
+                if (item.isSelected) {
+                    card.setStrokeColor(ContextCompat.getColor(card.context, R.color.m3_primary))
+                    card.strokeWidth = (1.5f * density).toInt()
+                    card.setCardBackgroundColor(ContextCompat.getColor(card.context, R.color.m3_surface_container_high))
+                    checkIcon.isVisible = true
+                    nameView.setTypeface(null, Typeface.BOLD)
+                } else {
+                    card.setStrokeColor(ContextCompat.getColor(card.context, R.color.m3_outline_variant))
+                    card.strokeWidth = (1f * density).toInt()
+                    card.setCardBackgroundColor(ContextCompat.getColor(card.context, R.color.m3_surface_container))
+                    checkIcon.isVisible = false
+                    nameView.setTypeface(null, Typeface.NORMAL)
+                }
+
+                val colorRes = when (item.health) {
+                    TunnelHealth.AVAILABLE -> R.color.state_running
+                    TunnelHealth.UNAVAILABLE -> R.color.state_error
+                    TunnelHealth.CHECKING -> R.color.state_connecting
+                    TunnelHealth.UNKNOWN -> R.color.state_idle
+                }
+                dot.background?.setTint(ContextCompat.getColor(card.context, colorRes))
+
+                card.setOnClickListener {
+                    it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
+                    onSelect(tunnel)
+                }
+                btnMore.setOnClickListener {
+                    it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
+                    onMore(it, tunnel)
+                }
+                card.setOnLongClickListener {
+                    it.performAppHaptics(HapticFeedbackConstants.LONG_PRESS)
+                    onMore(btnMore, tunnel)
+                    true
+                }
+            }
+        }
     }
 
     private fun showItemContextMenu(anchor: View, tunnel: Tunnel) {

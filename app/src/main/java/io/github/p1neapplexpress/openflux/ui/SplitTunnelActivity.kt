@@ -48,8 +48,9 @@ import androidx.core.widget.doAfterTextChanged
 
 import androidx.lifecycle.lifecycleScope
 
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
-
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -87,11 +88,9 @@ import kotlinx.coroutines.withContext
 class SplitTunnelActivity : AppCompatActivity() {
 
     companion object {
-
         private const val SECTION_APPS = 0
-
         private const val SECTION_SITES = 1
-
+        private const val PAYLOAD_CHECKED = "payload_checked"
     }
 
     private var activeSection = SECTION_APPS
@@ -1001,58 +1000,47 @@ class SplitTunnelActivity : AppCompatActivity() {
 
     // --- Recycler View Adapters ---
 
-    private class AppsAdapter(
+    private class AppDiffCallback : DiffUtil.ItemCallback<AppItem>() {
+        override fun areItemsTheSame(oldItem: AppItem, newItem: AppItem): Boolean =
+            oldItem.packageName == newItem.packageName
 
-        private val onToggle: (AppItem, Boolean) -> Unit
+        override fun areContentsTheSame(oldItem: AppItem, newItem: AppItem): Boolean =
+            oldItem.name == newItem.name && oldItem.isSelected == newItem.isSelected
 
-    ) : RecyclerView.Adapter<AppsAdapter.AppViewHolder>() {
-
-        var currentList: List<AppItem> = emptyList()
-
-            private set
-
-        fun submitList(list: List<AppItem>) {
-
-            currentList = list
-
-            notifyDataSetChanged()
-
+        override fun getChangePayload(oldItem: AppItem, newItem: AppItem): Any? {
+            return if (oldItem.isSelected != newItem.isSelected && oldItem.name == newItem.name) {
+                PAYLOAD_CHECKED
+            } else {
+                null
+            }
         }
+    }
+
+    private class AppsAdapter(
+        private val onToggle: (AppItem, Boolean) -> Unit
+    ) : ListAdapter<AppItem, AppsAdapter.AppViewHolder>(AppDiffCallback()) {
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): AppViewHolder {
-
             val v = LayoutInflater.from(parent.context).inflate(R.layout.item_split_app, parent, false)
-
             return AppViewHolder(v)
-
         }
 
         override fun onBindViewHolder(holder: AppViewHolder, position: Int) {
-
-            val item = currentList[position]
-
+            val item = getItem(position)
             holder.appName.text = item.name
-
             holder.appPackage.text = item.packageName
-
             if (item.icon != null) {
-
                 holder.appIcon.setImageDrawable(item.icon)
-
             } else {
-
                 holder.appIcon.setImageResource(R.mipmap.ic_launcher_round)
-
             }
-
             holder.checkbox.setOnCheckedChangeListener(null)
-
             holder.checkbox.isChecked = item.isSelected
 
             val toggleAction = {
                 val pos = holder.bindingAdapterPosition
                 if (pos != RecyclerView.NO_POSITION && pos in currentList.indices) {
-                    val currentItem = currentList[pos]
+                    val currentItem = getItem(pos)
                     val newState = !holder.checkbox.isChecked
                     holder.checkbox.isChecked = newState
                     onToggle(currentItem, newState)
@@ -1068,85 +1056,59 @@ class SplitTunnelActivity : AppCompatActivity() {
                 it.performAppHaptics(HapticFeedbackConstants.CLOCK_TICK)
                 val pos = holder.bindingAdapterPosition
                 if (pos != RecyclerView.NO_POSITION && pos in currentList.indices) {
-                    val currentItem = currentList[pos]
+                    val currentItem = getItem(pos)
                     onToggle(currentItem, holder.checkbox.isChecked)
                 }
             }
-
         }
 
-        override fun getItemCount(): Int = currentList.size
+        override fun onBindViewHolder(holder: AppViewHolder, position: Int, payloads: MutableList<Any>) {
+            if (payloads.contains(PAYLOAD_CHECKED)) {
+                val item = getItem(position)
+                holder.checkbox.setOnCheckedChangeListener(null)
+                holder.checkbox.isChecked = item.isSelected
+            } else {
+                super.onBindViewHolder(holder, position, payloads)
+            }
+        }
 
         class AppViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-
             val appIcon: ImageView = view.findViewById(R.id.app_icon)
-
             val appName: TextView = view.findViewById(R.id.app_name)
-
             val appPackage: TextView = view.findViewById(R.id.app_package)
-
             val checkbox: CheckBox = view.findViewById(R.id.app_checkbox)
-
         }
+    }
 
+    private class DomainDiffCallback : DiffUtil.ItemCallback<String>() {
+        override fun areItemsTheSame(oldItem: String, newItem: String): Boolean = oldItem == newItem
+        override fun areContentsTheSame(oldItem: String, newItem: String): Boolean = oldItem == newItem
     }
 
     private class DomainsAdapter(
-
         private val onDelete: (String) -> Unit
-
-    ) : RecyclerView.Adapter<DomainsAdapter.DomainViewHolder>() {
-
-        var currentList: List<String> = emptyList()
-
-            private set
-
-        fun submitList(list: List<String>) {
-
-            currentList = list
-
-            notifyDataSetChanged()
-
-        }
+    ) : ListAdapter<String, DomainsAdapter.DomainViewHolder>(DomainDiffCallback()) {
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): DomainViewHolder {
-
             val v = LayoutInflater.from(parent.context).inflate(R.layout.item_split_domain, parent, false)
-
             return DomainViewHolder(v)
-
         }
 
         override fun onBindViewHolder(holder: DomainViewHolder, position: Int) {
-
-            val domain = currentList[position]
-
+            val domain = getItem(position)
             holder.siteDomain.text = domain
-
             holder.siteType.text = holder.itemView.context.getString(R.string.split_sites_domain_rule)
-
             holder.btnDelete.setOnClickListener {
-
                 it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
-
                 onDelete(domain)
-
             }
-
         }
-
-        override fun getItemCount(): Int = currentList.size
 
         class DomainViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-
             val siteDomain: TextView = view.findViewById(R.id.site_domain)
-
             val siteType: TextView = view.findViewById(R.id.site_type)
-
             val btnDelete: ImageView = view.findViewById(R.id.btn_delete_site)
-
         }
-
     }
 
 }

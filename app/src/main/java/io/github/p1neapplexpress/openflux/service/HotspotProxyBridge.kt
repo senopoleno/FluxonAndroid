@@ -27,6 +27,7 @@ object HotspotProxyBridge {
     private var serverSocket: ServerSocket? = null
     private var executor: ExecutorService? = null
     private var acceptThread: Thread? = null
+    private val activeSockets = java.util.concurrent.ConcurrentHashMap.newKeySet<Socket>()
 
     @Synchronized
     fun start(
@@ -65,18 +66,26 @@ object HotspotProxyBridge {
                 while (isRunning.get() && !sSocket.isClosed) {
                     try {
                         val client = sSocket.accept()
+                        activeSockets.add(client)
                         if (!isAllowedClient(client.inetAddress)) {
                             Logx.w(TAG, "Rejecting unauthorized client from ${client.inetAddress}")
+                            activeSockets.remove(client)
                             runCatching { client.close() }
                             continue
                         }
                         client.soTimeout = 30_000
                         try {
                             pool.execute {
-                                handleClient(client, targetLocalPort, authEnabled, username, password)
+                                try {
+                                    handleClient(client, targetLocalPort, authEnabled, username, password)
+                                } finally {
+                                    activeSockets.remove(client)
+                                    runCatching { client.close() }
+                                }
                             }
                         } catch (re: RejectedExecutionException) {
                             Logx.w(TAG, "Hotspot worker pool saturated (32 active); rejecting client")
+                            activeSockets.remove(client)
                             runCatching { client.close() }
                         }
                     } catch (e: Exception) {
@@ -105,12 +114,19 @@ object HotspotProxyBridge {
         acceptThread = null
         runCatching { executor?.shutdownNow() }
         executor = null
+        activeSockets.forEach { sock ->
+            runCatching { sock.close() }
+        }
+        activeSockets.clear()
     }
 
     private fun isAllowedClient(clientAddress: InetAddress): Boolean {
-        val host = clientAddress.hostAddress ?: return false
+        var host = clientAddress.hostAddress ?: return false
         // Allow loopback (health checks, local tools)
         if (host == "127.0.0.1" || host == "::1") return true
+        if (host.startsWith("::ffff:")) {
+            host = host.removePrefix("::ffff:")
+        }
         // RFC-1918 private ranges: 10/8, 172.16/12, 192.168/16
         // Covers all Android hotspot subnets (Samsung, Xiaomi, Huawei, AOSP, etc.)
         val parts = host.split(".")
@@ -241,6 +257,10 @@ object HotspotProxyBridge {
             }
             0x03 -> { // Domain name
                 val len = cin.read()
+                if (len <= 0) {
+                    clientSocket.close()
+                    return
+                }
                 val domainBytes = ByteArray(len)
                 cin.readFully(domainBytes)
                 destHost = String(domainBytes, Charsets.UTF_8)
@@ -275,6 +295,7 @@ object HotspotProxyBridge {
             clientSocket.close()
             return
         }
+        activeSockets.add(targetSocket)
 
         val tin = targetSocket.getInputStream()
         val tout = targetSocket.getOutputStream()
@@ -282,6 +303,7 @@ object HotspotProxyBridge {
         // Execute CONNECT on upstream SOCKS5
         val ok = socks5Connect(tin, tout, destHost, destPort)
         if (!ok) {
+            activeSockets.remove(targetSocket)
             runCatching { targetSocket.close() }
             cout.write(byteArrayOf(0x05, 0x04, 0x00, 0x01, 0,0,0,0, 0,0)) // 0x04 = Host unreachable
             cout.flush()
@@ -379,15 +401,27 @@ object HotspotProxyBridge {
             destPort = uriPort ?: hostHeader?.split(":")?.getOrNull(1)?.toIntOrNull() ?: 80
         }
 
-        val targetSocket = Socket().apply {
-            soTimeout = 15000
-            connect(java.net.InetSocketAddress(InetAddress.getByName("127.0.0.1"), targetLocalPort), 4000)
+        val targetSocket = try {
+            Socket().apply {
+                soTimeout = 15000
+                connect(java.net.InetSocketAddress(InetAddress.getByName("127.0.0.1"), targetLocalPort), 4000)
+            }
+        } catch (e: Exception) {
+            Logx.w(TAG, "Cannot connect to upstream HTTP target: ${e.message}")
+            if (method == "CONNECT") {
+                cout.write("HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n".toByteArray(Charsets.UTF_8))
+                cout.flush()
+            }
+            clientSocket.close()
+            return
         }
+        activeSockets.add(targetSocket)
         val tin = targetSocket.getInputStream()
         val tout = targetSocket.getOutputStream()
 
         val ok = socks5Connect(tin, tout, destHost, destPort)
         if (!ok) {
+            activeSockets.remove(targetSocket)
             runCatching { targetSocket.close() }
             if (method == "CONNECT") {
                 cout.write("HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n".toByteArray(Charsets.UTF_8))
@@ -456,9 +490,12 @@ object HotspotProxyBridge {
     private fun readHeaderLine(inStream: InputStream): String {
         val sb = StringBuilder()
         var prev = -1
+        var count = 0
         while (true) {
             val b = inStream.read()
             if (b < 0) break
+            count++
+            if (count > 8192) throw java.io.IOException("Header line exceeded 8KB")
             if (b == '\n'.code && prev == '\r'.code) {
                 sb.setLength(sb.length - 1)
                 break
@@ -479,11 +516,15 @@ object HotspotProxyBridge {
     ) {
         clientSocket.soTimeout = 30_000
         targetSocket.soTimeout = 30_000
+        activeSockets.add(clientSocket)
+        activeSockets.add(targetSocket)
         val t1 = Thread({
             try {
                 pipe(cin, tout)
             } finally {
+                activeSockets.remove(targetSocket)
                 runCatching { targetSocket.close() }
+                activeSockets.remove(clientSocket)
                 runCatching { clientSocket.close() }
             }
         }, "HotspotBridge-ClientToTarget")
@@ -491,7 +532,9 @@ object HotspotProxyBridge {
             try {
                 pipe(tin, cout)
             } finally {
+                activeSockets.remove(clientSocket)
                 runCatching { clientSocket.close() }
+                activeSockets.remove(targetSocket)
                 runCatching { targetSocket.close() }
             }
         }, "HotspotBridge-TargetToClient")

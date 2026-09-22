@@ -60,7 +60,7 @@
 
     <!-- M3 Semantic Tokens: Primary (Dark) -->
     <color name="m3_primary">#4F7CFF</color>
-    <color name="m3_on_primary">#FFFFFF</color>
+    <color name="m3_on_primary">#051B4D</color>
     <color name="m3_primary_container">#1E3A8A</color>
     <color name="m3_on_primary_container">#DBEAFE</color>
 

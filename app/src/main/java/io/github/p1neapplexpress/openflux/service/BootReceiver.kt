@@ -125,13 +125,26 @@ class BootReceiver : BroadcastReceiver() {
             dohUrl = if (effectiveDoh) appSettings.dohUrl else null,
         )
 
-        val vpnIntent = VpnIntentFactory.build(context, cfg).apply {
-            putExtra(io.github.p1neapplexpress.openflux.util.Constants.INTENT_AUTONOMOUS, true)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(vpnIntent)
+        if (appSettings.proxyOnlyMode) {
+            val proxyIntent = Intent(context, FluxonProxyService::class.java).apply {
+                putExtra(io.github.p1neapplexpress.openflux.util.Constants.INTENT_NAME, prepared.name)
+                putExtra(io.github.p1neapplexpress.openflux.util.Constants.INTENT_TRANSPORT_TYPE, prepared.transportType)
+                putExtra(io.github.p1neapplexpress.openflux.util.Constants.INTENT_TRANSPORT_PAYLOAD, modifiedPayload.toTypedArray())
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(proxyIntent)
+            } else {
+                context.startService(proxyIntent)
+            }
         } else {
-            context.startService(vpnIntent)
+            val vpnIntent = VpnIntentFactory.build(context, cfg).apply {
+                putExtra(io.github.p1neapplexpress.openflux.util.Constants.INTENT_AUTONOMOUS, true)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(vpnIntent)
+            } else {
+                context.startService(vpnIntent)
+            }
         }
             } catch (e: Exception) {
                 Logx.e(TAG, "Error in boot auto-connect", e)

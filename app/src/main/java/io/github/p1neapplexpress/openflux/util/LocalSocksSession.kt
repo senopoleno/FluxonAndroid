@@ -122,9 +122,22 @@ object LocalSocksSession {
     }
 
     private fun findAvailablePort(): Int {
+        try {
+            ServerSocket(0, 50, InetAddress.getByName("127.0.0.1")).use { socket ->
+                return socket.localPort
+            }
+        } catch (be: java.net.BindException) {
+            Logx.w("LocalSocksSession", "BindException on ephemeral port selection: ${be.message}")
+        } catch (_: Exception) {
+        }
+
         for (attempt in 1..25) {
             val candidate = (30000..60000).random()
-            if (isPortFree(candidate)) return candidate
+            try {
+                if (isPortFree(candidate)) return candidate
+            } catch (_: java.net.BindException) {
+                continue
+            }
         }
         return (30000..60000).random()
     }
@@ -136,6 +149,8 @@ object LocalSocksSession {
                 socket.bind(InetSocketAddress(InetAddress.getByName("127.0.0.1"), port))
                 true
             }
+        } catch (_: java.net.BindException) {
+            false
         } catch (_: Exception) {
             false
         }

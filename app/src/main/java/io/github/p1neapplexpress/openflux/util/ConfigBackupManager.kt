@@ -40,7 +40,8 @@ object ConfigBackupManager {
     suspend fun exportBackup(context: Context, uri: Uri): Result<Int> = withContext(Dispatchers.IO) {
         runCatching {
             val repo = TunnelRepository(context)
-            val tunnels = repo.load()
+            val rawTunnels = repo.load()
+            val tunnels = rawTunnels.map { TunnelLinkParser.prepareForExport(context, it) }
             val splitPrefs = SplitTunnelPreferences(context)
             val domainPrefs = DomainRulesPreferences(context)
 
@@ -91,11 +92,14 @@ object ConfigBackupManager {
             var importedCount = 0
             val usedIds = currentTunnels.map { it.id }.toMutableSet()
             for (rawTunnel in backup.tunnels) {
-                val tunnel = if (usedIds.contains(rawTunnel.id) && currentTunnels.none { it.id == rawTunnel.id && it.name == rawTunnel.name }) {
+                val idResolved = if (usedIds.contains(rawTunnel.id) && currentTunnels.none { it.id == rawTunnel.id && it.name == rawTunnel.name }) {
                     var newId = System.currentTimeMillis() * 1000L + kotlin.random.Random.nextLong(1000L)
                     while (usedIds.contains(newId)) { newId++ }
                     rawTunnel.copy(id = newId)
                 } else rawTunnel
+
+                // Recreate local key file on disk with private 0600 permissions and update --encryption-key-file payload
+                val tunnel = TunnelLinkParser.ensureLocalKeyFile(context, idResolved)
                 usedIds.add(tunnel.id)
                 val existingIndex = currentTunnels.indexOfFirst { it.name == tunnel.name }
                 if (existingIndex >= 0) {

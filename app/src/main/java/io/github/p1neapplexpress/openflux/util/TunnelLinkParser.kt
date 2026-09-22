@@ -39,7 +39,8 @@ object TunnelLinkParser {
             if (keyPath.isNotEmpty()) {
                 val f = File(keyPath).canonicalFile
                 val allowedDir = context.filesDir.canonicalFile
-                if (f.absolutePath.startsWith(allowedDir.absolutePath)) {
+                val allowedPrefix = allowedDir.absolutePath + File.separator
+                if (f.absolutePath == allowedDir.absolutePath || f.absolutePath.startsWith(allowedPrefix)) {
                     key = runCatching { f.readText().trim() }.getOrNull()
                 } else {
                     Logx.w(TAG, "Rejected key file path outside filesDir: $keyPath")
@@ -104,7 +105,8 @@ object TunnelLinkParser {
             if (keyIdx != -1 && keyIdx + 1 < payload.size) {
                 val f = File(payload[keyIdx + 1]).canonicalFile
                 val allowedDir = context.filesDir.canonicalFile
-                if (f.absolutePath.startsWith(allowedDir.absolutePath) && f.exists()) {
+                val allowedPrefix = allowedDir.absolutePath + File.separator
+                if ((f.absolutePath == allowedDir.absolutePath || f.absolutePath.startsWith(allowedPrefix)) && f.exists()) {
                     key = runCatching { f.readText().trim() }.getOrNull()
                 }
             }
@@ -242,7 +244,7 @@ object TunnelLinkParser {
         ) {
             val uri = runCatching { Uri.parse(trimmed) }.getOrNull()
             if (uri != null) {
-                tunnel = fromUri(uri, context)
+                tunnel = runCatching { fromUri(uri, context) }.getOrNull()
                 if (tunnel != null) return tunnel
             }
         }
@@ -259,10 +261,17 @@ object TunnelLinkParser {
 
         // Smart parser: CLI arguments or raw URLs
         if (tunnel == null) {
-            if (trimmed.contains("--transport") || trimmed.contains("--url") || trimmed.contains("--urls")) {
+            if (trimmed.contains("--transport") || trimmed.contains("--url") || trimmed.contains("--urls") ||
+                trimmed.contains("--maxToken") || trimmed.contains("--maxUid")) {
                 val tokens = trimmed.split(Regex("\\s+"))
                 fun getArg(name: String): String? {
-                    val idx = tokens.indexOf(name)
+                    val eqPrefix = "$name="
+                    for (token in tokens) {
+                        if (token.startsWith(eqPrefix, ignoreCase = true)) {
+                            return token.substring(eqPrefix.length).trim('"', '\'')
+                        }
+                    }
+                    val idx = tokens.indexOfFirst { it.equals(name, ignoreCase = true) }
                     return if (idx >= 0 && idx + 1 < tokens.size) tokens[idx + 1].trim('"', '\'') else null
                 }
                 val rawTransport = getArg("--transport") ?: "yandex"
@@ -335,7 +344,7 @@ object TunnelLinkParser {
         }
     }
 
-    fun fromUri(uri: Uri, context: Context? = null): Tunnel? {
+    fun fromUri(uri: Uri, context: Context? = null): Tunnel? = runCatching {
         val scheme = uri.scheme?.lowercase()
         if (scheme != SCHEME_OPENFLUX &&
             scheme != SCHEME_FLUXON &&
@@ -345,27 +354,94 @@ object TunnelLinkParser {
         }
 
         var tunnel: Tunnel? = null
+        val uriStr = uri.toString().trim()
 
-        val dataParam = uri.getQueryParameter(PARAM_DATA)
-            ?: uri.getQueryParameter("config")
-            ?: uri.getQueryParameter("c")
-            ?: uri.getQueryParameter("tunnel")
-        if (!dataParam.isNullOrBlank()) {
-            decodeBase64(dataParam)?.let { jsonStr ->
-                tunnel = decodeTunnelFromJson(jsonStr)
+        // Helper to parse query parameters from a query string (e.g. key=val&key2=val2)
+        fun parseQueryPairs(query: String): Map<String, String> {
+            val map = mutableMapOf<String, String>()
+            query.split('&').forEach { pair ->
+                if (pair.isNotBlank()) {
+                    val eqIdx = pair.indexOf('=')
+                    if (eqIdx > 0) {
+                        val k = runCatching { Uri.decode(pair.substring(0, eqIdx)) }.getOrDefault(pair.substring(0, eqIdx))
+                        val v = runCatching { Uri.decode(pair.substring(eqIdx + 1)) }.getOrDefault(pair.substring(eqIdx + 1))
+                        map[k] = v
+                    } else {
+                        val k = runCatching { Uri.decode(pair) }.getOrDefault(pair)
+                        map[k] = ""
+                    }
+                }
             }
+            return map
         }
 
-        if (tunnel == null) {
-            val fragment = uri.fragment
-            if (!fragment.isNullOrBlank()) {
-                decodeBase64(fragment)?.let { jsonStr ->
-                    tunnel = decodeTunnelFromJson(jsonStr)
+        // Case-preserved extraction of raw authority / host:
+        // RFC 3986 URI parsing converts uri.host to lowercase, corrupting case-sensitive Base64.
+        // We extract the raw authority substring directly preserving original letter casing.
+        val rawAuthority = if (uriStr.startsWith("$scheme://", ignoreCase = true)) {
+            val afterScheme = uriStr.substring(scheme.length + 3)
+            afterScheme.substringBefore('/').substringBefore('?').substringBefore('#')
+        } else {
+            uri.encodedAuthority ?: uri.authority ?: ""
+        }
+        val rawHost = rawAuthority.substringAfter('@').substringBefore(':')
+
+        // 1. Data parameter parsing (Base64 or raw JSON)
+        if (uri.isHierarchical) {
+            val dataParam = runCatching {
+                uri.getQueryParameter(PARAM_DATA)
+                    ?: uri.getQueryParameter("config")
+                    ?: uri.getQueryParameter("c")
+                    ?: uri.getQueryParameter("tunnel")
+            }.getOrNull()
+
+            if (!dataParam.isNullOrBlank()) {
+                val decodedJson = decodeBase64(dataParam)
+                    ?: dataParam.trim().takeIf { it.startsWith("{") }
+                if (decodedJson != null) {
+                    tunnel = decodeTunnelFromJson(decodedJson)
+                }
+            }
+        } else {
+            // Opaque URI handling (e.g. openflux:eyJuYW1l... or openflux:import?data=... or openflux:?data=...)
+            val ssp = uri.schemeSpecificPart.orEmpty().trim().removePrefix("//")
+            // Try direct Base64 or JSON from ssp first
+            val directJson = decodeBase64(ssp)
+                ?: ssp.takeIf { it.startsWith("{") }
+            if (directJson != null) {
+                tunnel = decodeTunnelFromJson(directJson)
+            }
+
+            // If ssp contains query syntax, extract data parameter
+            if (tunnel == null && (ssp.contains('?') || ssp.contains('='))) {
+                val queryPart = if (ssp.contains('?')) ssp.substringAfter('?') else ssp
+                val params = parseQueryPairs(queryPart)
+                val dataVal = params[PARAM_DATA] ?: params["config"] ?: params["c"] ?: params["tunnel"]
+                if (!dataVal.isNullOrBlank()) {
+                    val decodedJson = decodeBase64(dataVal)
+                        ?: dataVal.trim().takeIf { it.startsWith("{") }
+                    if (decodedJson != null) {
+                        tunnel = decodeTunnelFromJson(decodedJson)
+                    }
                 }
             }
         }
 
+        // 2. Fragment fallback
         if (tunnel == null) {
+            val fragment = uri.fragment
+            if (!fragment.isNullOrBlank()) {
+                val cleanFrag = fragment.removePrefix("data=").removePrefix("config=")
+                val decodedJson = decodeBase64(cleanFrag)
+                    ?: cleanFrag.trim().takeIf { it.startsWith("{") }
+                if (decodedJson != null) {
+                    tunnel = decodeTunnelFromJson(decodedJson)
+                }
+            }
+        }
+
+        // 3. Path segments fallback (hierarchical only)
+        if (tunnel == null && uri.isHierarchical) {
             for (segment in uri.pathSegments.reversed()) {
                 decodeBase64(segment)?.let { jsonStr ->
                     tunnel = decodeTunnelFromJson(jsonStr)
@@ -374,29 +450,47 @@ object TunnelLinkParser {
             }
         }
 
+        // 4. Host position Base64 fallback (with case preservation!)
         if (tunnel == null) {
-            val host = uri.host
-            if (!host.isNullOrBlank() &&
-                !host.equals(HOST_IMPORT, ignoreCase = true) &&
-                !host.equals("config", ignoreCase = true)
+            if (rawHost.isNotBlank() &&
+                !rawHost.equals(HOST_IMPORT, ignoreCase = true) &&
+                !rawHost.equals("config", ignoreCase = true)
             ) {
-                decodeBase64(host)?.let { jsonStr ->
+                decodeBase64(rawHost)?.let { jsonStr ->
                     tunnel = decodeTunnelFromJson(jsonStr)
                 }
             }
         }
 
-        // Direct query parameter construction (e.g. paperflux://import?transport=yandex&urls=...&key=...)
+        // 5. Direct query parameter construction (including MAX transport token and uid support)
         if (tunnel == null) {
-            val rawUrls = uri.getQueryParameter("urls")
-            val rawUrl = uri.getQueryParameter("url")
-            if (!rawUrls.isNullOrBlank() || !rawUrl.isNullOrBlank()) {
-                val rawTransport = uri.getQueryParameter("transport")
-                    ?: uri.host?.takeIf { it != HOST_IMPORT && it != "config" }
-                    ?: "yandex"
-                val transType = io.github.p1neapplexpress.openflux.data.TransportType.from(rawTransport)
-                val key = uri.getQueryParameter("key") ?: uri.getQueryParameter("secret")
-                val name = uri.getQueryParameter("name") ?: when (transType) {
+            val queryMap: Map<String, String> = if (uri.isHierarchical) {
+                val keys = runCatching { uri.queryParameterNames }.getOrNull() ?: emptySet()
+                keys.associateWith { k -> runCatching { uri.getQueryParameter(k) }.getOrNull().orEmpty() }
+            } else {
+                val ssp = uri.schemeSpecificPart.orEmpty().trim().removePrefix("//")
+                val queryPart = if (ssp.contains('?')) ssp.substringAfter('?') else ssp
+                parseQueryPairs(queryPart)
+            }
+
+            fun param(k: String): String? = queryMap[k]?.takeIf { it.isNotBlank() }
+
+            val rawUrls = param("urls")
+            val rawUrl = param("url")
+            val token = param("token") ?: param("maxToken")
+            val uid = param("uid") ?: param("maxUid")
+            val rawTransport = param("transport")
+                ?: rawHost.takeIf { it.isNotBlank() && !it.equals(HOST_IMPORT, ignoreCase = true) && !it.equals("config", ignoreCase = true) }
+                ?: "yandex"
+            val transType = io.github.p1neapplexpress.openflux.data.TransportType.from(rawTransport)
+
+            if (!rawUrls.isNullOrBlank() ||
+                !rawUrl.isNullOrBlank() ||
+                (!token.isNullOrBlank() && !uid.isNullOrBlank()) ||
+                transType == io.github.p1neapplexpress.openflux.data.TransportType.max
+            ) {
+                val key = param("key") ?: param("secret")
+                val name = param("name") ?: when (transType) {
                     io.github.p1neapplexpress.openflux.data.TransportType.cups -> "CUPS Tunnel"
                     io.github.p1neapplexpress.openflux.data.TransportType.max -> "MAX Tunnel"
                     io.github.p1neapplexpress.openflux.data.TransportType.vyandex -> "Yandex Volga"
@@ -416,6 +510,12 @@ object TunnelLinkParser {
                     } else if (!rawUrl.isNullOrBlank()) {
                         add("--url"); add(rawUrl)
                     }
+                    if (!token.isNullOrBlank()) {
+                        add("--maxToken"); add(token)
+                    }
+                    if (!uid.isNullOrBlank()) {
+                        add("--maxUid"); add(uid)
+                    }
                 }
                 tunnel = Tunnel(
                     id = System.currentTimeMillis() * 1000L + kotlin.random.Random.nextLong(1000L),
@@ -427,12 +527,12 @@ object TunnelLinkParser {
             }
         }
 
-        return if (tunnel != null && context != null) {
-            ensureLocalKeyFile(context, tunnel)
+        if (tunnel != null && context != null) {
+            ensureLocalKeyFile(context, tunnel!!)
         } else {
             tunnel
         }
-    }
+    }.getOrNull()
 
     private fun decodeBase64(data: String): String? {
         val flagsList = intArrayOf(
@@ -457,7 +557,13 @@ object TunnelLinkParser {
     }
 
     private fun argValue(payload: List<String>, key: String): String {
-        val i = payload.indexOf(key)
+        val eqPrefix = "$key="
+        for (item in payload) {
+            if (item.startsWith(eqPrefix, ignoreCase = true)) {
+                return item.substring(eqPrefix.length).trim('"', '\'')
+            }
+        }
+        val i = payload.indexOfFirst { it.equals(key, ignoreCase = true) }
         return if (i != -1 && i + 1 < payload.size) payload[i + 1] else ""
     }
 }

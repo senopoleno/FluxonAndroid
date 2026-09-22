@@ -22,7 +22,9 @@ import android.view.animation.OvershootInterpolator
 import android.widget.PopupWindow
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.appbar.MaterialToolbar
 import io.github.p1neapplexpress.openflux.R
 import io.github.p1neapplexpress.openflux.event.AppEvent
@@ -142,8 +144,10 @@ class LogsFragment : BaseFragment() {
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
-            EventBus.events.collect { ev ->
-                if (ev is AppEvent.LogMessage) enqueue(ev.message)
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                EventBus.events.collect { ev ->
+                    if (ev is AppEvent.LogMessage) enqueue(ev.message)
+                }
             }
         }
     }

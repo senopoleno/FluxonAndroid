@@ -12,7 +12,9 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import io.github.p1neapplexpress.openflux.R
 import io.github.p1neapplexpress.openflux.event.EventBus
 import io.github.p1neapplexpress.openflux.util.AppUpdateChecker
@@ -65,9 +67,11 @@ class MainActivity : AppCompatActivity() {
             .commit()
 
         lifecycleScope.launch {
-            EventBus.events.collect { ev ->
-                supportFragmentManager.fragments.forEach { f ->
-                    if (f is BaseFragment) f.onNewEvent(ev)
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                EventBus.events.collect { ev ->
+                    supportFragmentManager.fragments.forEach { f ->
+                        if (f is BaseFragment) f.onNewEvent(ev)
+                    }
                 }
             }
         }

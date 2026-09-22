@@ -6,7 +6,7 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:background="@drawable/bg_bottom_sheet"
-    android:paddingHorizontal="20dp"
+    android:paddingHorizontal="24dp"
     android:paddingTop="12dp"
     android:paddingBottom="24dp">
 
@@ -45,21 +45,22 @@
                 android:id="@+id/configs_sheet_subtitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
+                android:layout_marginTop="4dp"
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp"
                 tools:text="Всего конфигураций: 3" />
 
         </LinearLayout>
 
-
         <!-- Close Button -->
         <ImageView
             android:id="@+id/btn_close_configs"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:minWidth="48dp"
+            android:minHeight="48dp"
             android:layout_marginStart="8dp"
-            android:padding="9dp"
+            android:padding="12dp"
             android:src="@drawable/ic_close"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:clickable="true"
@@ -97,23 +98,14 @@
 
     </com.google.android.material.textfield.TextInputLayout>
 
-    <!-- Scrollable items list -->
-    <androidx.core.widget.NestedScrollView
-        android:id="@+id/configs_scroll_view"
+    <!-- Recycler View for Configs -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/configs_recycler"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:overScrollMode="never"
         android:clipToPadding="false"
-        android:paddingBottom="12dp"
-        android:maxHeight="380dp">
-
-        <LinearLayout
-            android:id="@+id/configs_items_container"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical" />
-
-    </androidx.core.widget.NestedScrollView>
+        android:paddingBottom="12dp" />
 
     <!-- Empty State -->
     <LinearLayout
@@ -161,7 +153,7 @@
         app:iconPadding="8dp"
         app:strokeColor="@color/m3_outline_variant"
         app:strokeWidth="1dp"
-        app:cornerRadius="14dp"
+        app:cornerRadius="12dp"
         android:insetTop="0dp"
         android:insetBottom="0dp" />
 

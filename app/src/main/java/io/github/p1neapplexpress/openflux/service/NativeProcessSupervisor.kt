@@ -19,8 +19,14 @@ class NativeProcessSupervisor(private val context: Context) {
         @Volatile var activeLogLevel: String = ""
     }
 
+    class ProcessInstance(
+        val proc: Process,
+        val isCancelled: AtomicBoolean = AtomicBoolean(false)
+    )
+
     private val handler = Handler(Looper.getMainLooper())
     @Volatile private var process: Process? = null
+    @Volatile private var currentInstance: ProcessInstance? = null
     @Volatile private var stdoutThread: Thread? = null
     @Volatile private var gracePeriodRunnable: Runnable? = null
     @Volatile private var delayedConnectRunnable: Runnable? = null
@@ -58,6 +64,7 @@ class NativeProcessSupervisor(private val context: Context) {
         shuttingDown.set(true)
         running.set(false)
         connected.set(false)
+        currentInstance?.isCancelled?.set(true)
         cleanup()
     }
 
@@ -143,6 +150,8 @@ class NativeProcessSupervisor(private val context: Context) {
                 .directory(context.filesDir)
                 .redirectErrorStream(true)
             val proc = pb.start()
+            val instance = ProcessInstance(proc)
+            currentInstance = instance
             process = proc
             runCatching { proc.outputStream.close() }
 
@@ -153,6 +162,9 @@ class NativeProcessSupervisor(private val context: Context) {
                         while (r.readLine().also { line = it } != null) {
                             val l = line ?: continue
                             if (l.isBlank()) continue
+                            if (instance.isCancelled.get() || currentInstance !== instance) {
+                                break
+                            }
                             val lClean = l.replace(" (gVisor)", "")
                             android.util.Log.d("NativeStdout", l)
 
@@ -164,12 +176,36 @@ class NativeProcessSupervisor(private val context: Context) {
                                 Logx.i(TAG, "Multi-lane recovery active: $l")
                             }
 
+                            // CORE-06: Detect post-connect transport drops and Engine.IO close 1005 disconnects
+                            val isGeneralDrop = l.contains("transport disconnected", ignoreCase = true) ||
+                                    l.contains("websocket: close", ignoreCase = true) ||
+                                    l.contains("close 1005", ignoreCase = true) ||
+                                    l.contains("connection reset by peer", ignoreCase = true) ||
+                                    l.contains("broken pipe", ignoreCase = true)
+
+                            val isDrop = if (isMultiLane) {
+                                l.contains("close 1005", ignoreCase = true) ||
+                                        l.contains("all lanes failed", ignoreCase = true) ||
+                                        l.contains("all channels disconnected", ignoreCase = true)
+                            } else {
+                                isGeneralDrop || l.contains("Read error:", ignoreCase = true)
+                            }
+
+                            if (connected.get() && isDrop) {
+                                if (connected.getAndSet(false)) {
+                                    Logx.w(TAG, "Post-connect transport drop detected: $l")
+                                    EventBus.dispatch(AppEvent.TransportDisconnected)
+                                    EventBus.dispatch(AppEvent.LogMessage("[W] Обрыв транспорта: $l"))
+                                }
+                            }
+
                             // 1. Detect critical transport startup errors (ignore client proxy/routing lines)
                             if (!connected.get() && !l.contains("[ROUTER]") && !l.contains("[SOCKS5]")) {
                                 if (l.contains("Failed to start transport", ignoreCase = true) ||
                                     l.contains("panic:", ignoreCase = true) ||
                                     l.contains("Unknown transport type", ignoreCase = true) ||
-                                    l.contains("flag provided but not defined", ignoreCase = true)
+                                    l.contains("flag provided but not defined", ignoreCase = true) ||
+                                    l.contains("close 1005", ignoreCase = true)
                                 ) {
                                     delayedConnectRunnable?.let { handler.removeCallbacks(it) }
                                     delayedConnectRunnable = null
@@ -209,7 +245,7 @@ class NativeProcessSupervisor(private val context: Context) {
                                     delayedConnectRunnable?.let { handler.removeCallbacks(it) }
                                     val r = Runnable {
                                         delayedConnectRunnable = null
-                                        if (running.get() && !shuttingDown.get() && process?.isAlive == true) {
+                                        if (running.get() && !instance.isCancelled.get() && currentInstance === instance && proc.isAlive) {
                                             if (!connected.getAndSet(true)) {
                                                 EventBus.dispatch(AppEvent.TransportConnected)
                                                 Logx.i(TAG, "Native transport confirmed connected from stdout (delayed): $l")
@@ -221,9 +257,11 @@ class NativeProcessSupervisor(private val context: Context) {
                                 } else {
                                     delayedConnectRunnable?.let { handler.removeCallbacks(it) }
                                     delayedConnectRunnable = null
-                                    if (!connected.getAndSet(true)) {
-                                        EventBus.dispatch(AppEvent.TransportConnected)
-                                        Logx.i(TAG, "Native transport confirmed connected from stdout: $l")
+                                    if (running.get() && !instance.isCancelled.get() && currentInstance === instance && proc.isAlive) {
+                                        if (!connected.getAndSet(true)) {
+                                            EventBus.dispatch(AppEvent.TransportConnected)
+                                            Logx.i(TAG, "Native transport confirmed connected from stdout: $l")
+                                        }
                                     }
                                 }
                             }
@@ -252,7 +290,7 @@ class NativeProcessSupervisor(private val context: Context) {
                         }
                     }
                 } catch (e: Exception) {
-                    if (!shuttingDown.get()) {
+                    if (!instance.isCancelled.get() && currentInstance === instance) {
                         Logx.w(TAG, "stdout reader error: ${e.message}")
                     }
                 } finally {
@@ -261,7 +299,7 @@ class NativeProcessSupervisor(private val context: Context) {
                     gracePeriodRunnable?.let { handler.removeCallbacks(it) }
                     gracePeriodRunnable = null
                     val exitCode = try { proc.waitFor() } catch (_: Exception) { null }
-                    if (!shuttingDown.get()) {
+                    if (!instance.isCancelled.get() && currentInstance === instance) {
                         Logx.e(TAG, "native process exited unexpectedly with code $exitCode")
                         connected.set(false)
                         running.set(false)
@@ -277,8 +315,8 @@ class NativeProcessSupervisor(private val context: Context) {
 
             gracePeriodRunnable?.let { handler.removeCallbacks(it) }
             val runnable = Runnable {
-                if (!shuttingDown.get()) {
-                    if (process?.isAlive == true) {
+                if (!instance.isCancelled.get() && currentInstance === instance) {
+                    if (proc.isAlive) {
                         if (!connected.get()) {
                             Logx.w(TAG, "Native transport did not report connection within $STARTUP_FALLBACK_TIMEOUT_MS ms")
                             EventBus.dispatch(AppEvent.LogMessage("[W] Transport startup waiting for connection..."))
@@ -304,6 +342,24 @@ class NativeProcessSupervisor(private val context: Context) {
         }
     }
 
+    private fun cleanupInstance(inst: ProcessInstance) {
+        val p = inst.proc
+        runCatching { p.outputStream?.close() }
+        runCatching { p.inputStream?.close() }
+        runCatching { p.errorStream?.close() }
+        if (p.isAlive) {
+            p.destroy()
+            try {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    p.waitFor(300, java.util.concurrent.TimeUnit.MILLISECONDS)
+                }
+            } catch (_: Exception) {}
+            if (p.isAlive) {
+                p.destroyForcibly()
+            }
+        }
+    }
+
     private fun cleanup() {
         delayedConnectRunnable?.let { handler.removeCallbacks(it) }
         delayedConnectRunnable = null
@@ -311,25 +367,12 @@ class NativeProcessSupervisor(private val context: Context) {
         gracePeriodRunnable = null
         stdoutThread?.interrupt()
         stdoutThread = null
-        process?.let { p ->
-            runCatching { p.outputStream?.close() }
-            runCatching { p.inputStream?.close() }
-            runCatching { p.errorStream?.close() }
-            if (p.isAlive) {
-                p.destroy()
-                try {
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        p.waitFor(300, java.util.concurrent.TimeUnit.MILLISECONDS)
-                    }
-                } catch (_: Exception) {}
-                if (p.isAlive) {
-                    p.destroyForcibly()
-                }
-            }
+        currentInstance?.let { inst ->
+            cleanupInstance(inst)
         }
+        currentInstance = null
         process = null
         currentTunSocketName = null
     }
-
 
 }

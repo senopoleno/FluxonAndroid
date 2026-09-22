@@ -48,6 +48,9 @@ class SocksVpnService : android.net.VpnService() {
     private val serviceScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main + kotlinx.coroutines.SupervisorJob())
     private var pingJob: kotlinx.coroutines.Job? = null
     private var startupJob: kotlinx.coroutines.Job? = null
+    private var reconnectJob: kotlinx.coroutines.Job? = null
+    private var reconnectAttempts = 0
+    private val maxReconnectAttempts = 5
     private val alreadyStopping = java.util.concurrent.atomic.AtomicBoolean(false)
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
@@ -58,6 +61,19 @@ class SocksVpnService : android.net.VpnService() {
             override fun onAvailable(network: Network) {
                 Logx.i(TAG, "Underlying network changed: available $network")
                 runCatching { setUnderlyingNetworks(arrayOf(network)) }
+                if (vpn.isRunning.get() && !alreadyStopping.get()) {
+                    // Clear WaitingForNetwork state and notify UI (CORE-05)
+                    EventBus.dispatch(AppEvent.VpnConnected(activeTunnelName))
+                    // Verify transport viability on the new network interface
+                    serviceScope.launch(Dispatchers.IO) {
+                        val port = lastIntent?.getIntExtra(Constants.INTENT_PORT, 1080) ?: 1080
+                        val pingMs = measureRealEndToEndPing(port)
+                        if (pingMs < 0 && vpn.isRunning.get() && !alreadyStopping.get()) {
+                            Logx.w(TAG, "Ping failed over newly connected network; restarting transport")
+                            EventBus.dispatch(AppEvent.TransportDisconnected)
+                        }
+                    }
+                }
             }
 
             override fun onLost(network: Network) {
@@ -195,13 +211,23 @@ class SocksVpnService : android.net.VpnService() {
                 when (event) {
                     is AppEvent.TransportDisconnected -> {
                         if (vpn.isRunning.get() && !alreadyStopping.get()) {
-                            Logx.w(TAG, "Transport disconnected in running service; checking for multi-lane failover")
+                            reconnectJob?.cancel()
                             val rotated = rotateActivePayloadLanes()
-                            if (rotated != null) {
-                                serviceScope.launch(Dispatchers.IO) {
+                            val payloadToUse = rotated?.toList() ?: currentTransportPayload.toList()
+
+                            if (rotated != null || reconnectAttempts < maxReconnectAttempts) {
+                                reconnectAttempts++
+                                val backoffMs = (reconnectAttempts * 1500L).coerceAtMost(6000L)
+                                val modeDesc = if (rotated != null) "ротация каналов" else "авто-переподключение ($reconnectAttempts/$maxReconnectAttempts)"
+                                Logx.w(TAG, "Transport disconnected; scheduling attempt $reconnectAttempts/$maxReconnectAttempts ($modeDesc) in ${backoffMs}ms")
+
+                                reconnectJob = serviceScope.launch(Dispatchers.IO) {
                                     EventBus.dispatch(AppEvent.Reconnecting(activeTunnelName))
-                                    EventBus.dispatch(AppEvent.LogMessage("[I] [TRANSPORT] Автоматическая ротация каналов (Service)..."))
-                                    supervisor.start(currentTransportType, rotated.toList())
+                                    EventBus.dispatch(AppEvent.LogMessage("[I] [TRANSPORT] $modeDesc через ${backoffMs}мс..."))
+                                    kotlinx.coroutines.delay(backoffMs)
+                                    if (alreadyStopping.get() || !isActive) return@launch
+
+                                    supervisor.start(currentTransportType, payloadToUse)
                                     val rawFd = vpn.fileDescriptor
                                     if (rawFd != null && supervisor.passTunFd(rawFd)) {
                                         var ready = false
@@ -214,20 +240,30 @@ class SocksVpnService : android.net.VpnService() {
                                             }
                                         }
                                         if (ready) {
+                                            reconnectAttempts = 0
                                             EventBus.dispatch(AppEvent.VpnConnected(activeTunnelName))
-                                            EventBus.dispatch(AppEvent.LogMessage("[S] Ротация каналов завершена, связь восстановлена"))
-                                            Logx.i(TAG, "Multi-lane rotation successful")
+                                            EventBus.dispatch(AppEvent.LogMessage("[S] Связь с транспортом успешно восстановлена"))
+                                            Logx.i(TAG, "Reconnection successful")
                                         } else {
-                                            Logx.e(TAG, "Multi-lane failover timed out")
-                                            stopEverything()
+                                            Logx.w(TAG, "Reconnection attempt $reconnectAttempts failed or timed out")
+                                            if (reconnectAttempts >= maxReconnectAttempts) {
+                                                Logx.e(TAG, "Maximum reconnection attempts reached; stopping service")
+                                                stopEverything()
+                                            } else {
+                                                EventBus.dispatch(AppEvent.TransportDisconnected)
+                                            }
                                         }
                                     } else {
-                                        Logx.e(TAG, "Failed to pass TUN FD during multi-lane failover")
-                                        stopEverything()
+                                        Logx.e(TAG, "Failed to pass TUN FD during reconnection")
+                                        if (reconnectAttempts >= maxReconnectAttempts) {
+                                            stopEverything()
+                                        } else {
+                                            EventBus.dispatch(AppEvent.TransportDisconnected)
+                                        }
                                     }
                                 }
                             } else {
-                                Logx.e(TAG, "Transport disconnected without alternate lanes, stopping service")
+                                Logx.e(TAG, "Transport disconnected and reconnect attempts exhausted; stopping service")
                                 stopEverything()
                             }
                         }
@@ -265,6 +301,9 @@ class SocksVpnService : android.net.VpnService() {
         }
 
         alreadyStopping.set(false)
+        reconnectJob?.cancel()
+        reconnectJob = null
+        reconnectAttempts = 0
         val transportType = intent.getStringExtra(Constants.INTENT_TRANSPORT_TYPE) ?: "yandex"
         val transportPayload = try {
             intent.getStringArrayExtra(Constants.INTENT_TRANSPORT_PAYLOAD)
@@ -343,6 +382,7 @@ class SocksVpnService : android.net.VpnService() {
 
                 if (ready) {
                     synchronized(this@SocksVpnService) {
+                        reconnectAttempts = 0
                         vpn.isRunning.set(true)
                         connectedAtRealtime = android.os.SystemClock.elapsedRealtime()
                         val tName = intent.getStringExtra(Constants.INTENT_NAME) ?: activeTunnelName
@@ -393,6 +433,10 @@ class SocksVpnService : android.net.VpnService() {
     override fun onDestroy() {
         startupJob?.cancel()
         startupJob = null
+        pingJob?.cancel()
+        pingJob = null
+        reconnectJob?.cancel()
+        reconnectJob = null
         stopEverything()
         serviceScope.cancel()
         super.onDestroy()
@@ -472,6 +516,11 @@ class SocksVpnService : android.net.VpnService() {
         Logx.i(TAG, "stopEverything")
         startupJob?.cancel()
         startupJob = null
+        pingJob?.cancel()
+        pingJob = null
+        reconnectJob?.cancel()
+        reconnectJob = null
+        reconnectAttempts = 0
         connectedAtRealtime = 0L
         activeTunnelName = null
         EventBus.dispatch(AppEvent.VpnDisconnected)

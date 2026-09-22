@@ -7,14 +7,14 @@
     android:background="@drawable/bg_bottom_sheet"
     android:paddingHorizontal="24dp"
     android:paddingTop="12dp"
-    android:paddingBottom="28dp">
+    android:paddingBottom="24dp">
 
     <View
         android:layout_width="36dp"
         android:layout_height="4dp"
         android:layout_gravity="center_horizontal"
         android:background="@drawable/bg_drag_handle"
-        android:layout_marginBottom="18dp" />
+        android:layout_marginBottom="16dp" />
 
     <TextView
         android:layout_width="match_parent"
@@ -27,7 +27,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
+        android:layout_marginTop="4dp"
         android:layout_marginBottom="16dp"
         android:text="@string/settings_icon_choose"
         android:textColor="@color/text_secondary"
@@ -38,7 +38,7 @@
         android:id="@+id/card_icon_dark"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="10dp"
+        android:layout_marginBottom="12dp"
         android:clickable="true"
         android:focusable="true"
         app:cardBackgroundColor="@color/m3_surface_container"
@@ -57,7 +57,7 @@
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="48dp"
                 android:layout_height="48dp"
-                android:layout_marginEnd="14dp"
+                android:layout_marginEnd="12dp"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="0dp"
                 app:strokeWidth="0dp">
@@ -88,7 +88,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="3dp"
+                    android:layout_marginTop="4dp"
                     android:text="@string/settings_icon_dark_desc"
                     android:textColor="@color/text_secondary"
                     android:textSize="12sp" />
@@ -97,8 +97,8 @@
 
             <ImageView
                 android:id="@+id/check_icon_dark"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
                 android:src="@drawable/ic_check"
                 android:visibility="gone"
                 app:tint="@color/m3_primary"
@@ -132,7 +132,7 @@
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="48dp"
                 android:layout_height="48dp"
-                android:layout_marginEnd="14dp"
+                android:layout_marginEnd="12dp"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="0dp"
                 app:strokeWidth="0dp">
@@ -163,7 +163,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="3dp"
+                    android:layout_marginTop="4dp"
                     android:text="@string/settings_icon_light_desc"
                     android:textColor="@color/text_secondary"
                     android:textSize="12sp" />
@@ -172,8 +172,8 @@
 
             <ImageView
                 android:id="@+id/check_icon_light"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
                 android:src="@drawable/ic_check"
                 android:visibility="gone"
                 app:tint="@color/m3_primary"

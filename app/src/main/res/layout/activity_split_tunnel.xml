@@ -100,77 +100,72 @@
 
     </LinearLayout>
 
-    <!-- Full-page Scrollable Container for Ultimate UI Freedom -->
-    <androidx.core.widget.NestedScrollView
+    <!-- Content Container (Eliminated NestedScrollView wrapping RecyclerView) -->
+    <LinearLayout
         android:id="@+id/scroll_container"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:fillViewport="true"
-        android:overScrollMode="never">
+        android:orientation="vertical">
 
+        <!-- Section Switcher: Apps vs Sites -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:paddingHorizontal="16dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="12dp">
+
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/section_toggle_group"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                app:singleSelection="true"
+                app:selectionRequired="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_section_apps"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="@string/split_section_apps"
+                    android:textAllCaps="false"
+                    android:textSize="14sp"
+                    app:icon="@drawable/ic_apps"
+                    app:iconSize="18dp"
+                    app:iconGravity="textStart"
+                    app:cornerRadius="12dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_section_sites"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="@string/split_section_sites"
+                    android:textAllCaps="false"
+                    android:textSize="14sp"
+                    app:icon="@drawable/ic_domain"
+                    app:iconSize="18dp"
+                    app:iconGravity="textStart"
+                    app:cornerRadius="12dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp" />
+
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+
+        </LinearLayout>
+
+        <!-- 1. Apps Section Container -->
+        <LinearLayout
+            android:id="@+id/container_apps_section"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
             android:orientation="vertical">
-
-            <!-- Section Switcher: Apps vs Sites (Moved comfortably lower from header) -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingHorizontal="16dp"
-                android:layout_marginTop="14dp"
-                android:layout_marginBottom="12dp">
-
-                <com.google.android.material.button.MaterialButtonToggleGroup
-                    android:id="@+id/section_toggle_group"
-                    android:layout_width="match_parent"
-                    android:layout_height="44dp"
-                    app:singleSelection="true"
-                    app:selectionRequired="true">
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_section_apps"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="0dp"
-                        android:layout_height="match_parent"
-                        android:layout_weight="1"
-                        android:text="@string/split_section_apps"
-                        android:textAllCaps="false"
-                        android:textSize="14sp"
-                        app:icon="@drawable/ic_apps"
-                        app:iconSize="18dp"
-                        app:iconGravity="textStart"
-                        app:cornerRadius="12dp"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_section_sites"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="0dp"
-                        android:layout_height="match_parent"
-                        android:layout_weight="1"
-                        android:text="@string/split_section_sites"
-                        android:textAllCaps="false"
-                        android:textSize="14sp"
-                        app:icon="@drawable/ic_domain"
-                        app:iconSize="18dp"
-                        app:iconGravity="textStart"
-                        app:cornerRadius="12dp"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp" />
-
-                </com.google.android.material.button.MaterialButtonToggleGroup>
-
-            </LinearLayout>
-
-            <!-- 1. Apps Section Container -->
-            <LinearLayout
-                android:id="@+id/container_apps_section"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
 
                 <!-- Mode Toggle (Bypass vs Proxy) -->
                 <LinearLayout
@@ -335,16 +330,16 @@
                 <!-- Apps List & States -->
                 <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
+                    android:layout_height="0dp"
+                    android:layout_weight="1">
 
                     <androidx.recyclerview.widget.RecyclerView
                         android:id="@+id/apps_recycler"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:nestedScrollingEnabled="false"
+                        android:layout_height="match_parent"
                         android:clipToPadding="false"
                         android:paddingTop="4dp"
-                        android:paddingBottom="36dp" />
+                        android:paddingBottom="24dp" />
 
                     <ProgressBar
                         android:id="@+id/loading_progress"
@@ -391,7 +386,8 @@
             <LinearLayout
                 android:id="@+id/container_sites_section"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="0dp"
+                android:layout_weight="1"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -447,7 +443,7 @@
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:paddingHorizontal="18dp"
+                    android:paddingHorizontal="16dp"
                     android:paddingTop="8dp"
                     android:paddingBottom="8dp">
 
@@ -475,8 +471,8 @@
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:paddingHorizontal="18dp"
-                    android:paddingTop="6dp"
+                    android:paddingHorizontal="16dp"
+                    android:paddingTop="8dp"
                     android:paddingBottom="8dp">
 
                     <TextView
@@ -575,16 +571,16 @@
                 <!-- Sites Recycler & Empty State -->
                 <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
+                    android:layout_height="0dp"
+                    android:layout_weight="1">
 
                     <androidx.recyclerview.widget.RecyclerView
                         android:id="@+id/sites_recycler"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:nestedScrollingEnabled="false"
+                        android:layout_height="match_parent"
                         android:clipToPadding="false"
                         android:paddingTop="4dp"
-                        android:paddingBottom="36dp" />
+                        android:paddingBottom="24dp" />
 
                     <!-- Empty State without subtitle description -->
                     <LinearLayout
@@ -620,8 +616,6 @@
 
             </LinearLayout>
 
-        </LinearLayout>
-
-    </androidx.core.widget.NestedScrollView>
+    </LinearLayout>
 
 </LinearLayout>

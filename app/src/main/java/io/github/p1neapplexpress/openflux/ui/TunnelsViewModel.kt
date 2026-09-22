@@ -176,36 +176,8 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
                         }
                     }
                     is AppEvent.TransportDisconnected -> {
-                        if (_active.value.isActive) {
-                            Logx.e(TAG, "Transport disconnected event received")
-                            val cur = _active.value.tunnel
-                            val rotated = if (cur != null) rotateYandexLanes(cur) else null
-                            if (rotated != null) {
-                                Logx.i(TAG, "Автоматическая ротация каналов Yandex Docs...")
-                                EventBus.dispatch(AppEvent.LogMessage("[I] [TRANSPORT] Выполняется автоматическая ротация каналов Yandex Docs..."))
-                                _active.value = TunnelState.Reconnecting(rotated)
-                                viewModelScope.launch {
-                                    isSwitchingTunnel = true
-                                    stopInternal(preserveActiveState = true)
-                                    delay(400)
-                                    startTunnelInternal(rotated)
-                                }
-                            } else {
-                                val errorInfo = io.github.p1neapplexpress.openflux.util.TunnelErrorClassifier.classify("Transport disconnected")
-                                _active.value = TunnelState.Error(errorInfo.title, errorInfo.message)
-                                _tunnelHealth.value = TunnelHealth.UNAVAILABLE
-                                if (cur != null) {
-                                    saveHealth(cur.id, TunnelHealth.UNAVAILABLE)
-                                    pingCache.remove(cur.id)
-                                    _pingMap.value = pingCache.toMap()
-                                }
-                                stopUptimeCounter()
-                                refresh()
-                                if (cur != null) {
-                                    triggerFailoverIfNeeded(cur)
-                                }
-                            }
-                        }
+                        // Handled exclusively by SocksVpnService to prevent split-brain failover collision
+                        Logx.d(TAG, "Transport disconnected event received (handled by SocksVpnService)")
                     }
                     is AppEvent.Reconnecting -> {
                         val cur = _active.value.tunnel ?: _selected.value
