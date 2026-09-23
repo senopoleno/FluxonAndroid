@@ -477,5 +477,9 @@
     <string name="manual_section_general">Основное</string>
     <string name="manual_section_transport">Параметры транспорта</string>
     <string name="manual_section_security">Безопасность</string>
+    <string name="manual_section_extra">Дополнительные параметры</string>
+    <string name="extra_params">Параметры OpenFlux</string>
+    <string name="extra_params_hint">Например: --codec=legacy --mode=l3</string>
+    <string name="extra_params_helper">Дополнительные флаги командной строки для ядра OpenFlux</string>
     <string name="manual_url_helper">Несколько URL через запятую или новую строку для многоканальности</string>
 </resources>

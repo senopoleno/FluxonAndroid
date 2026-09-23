@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Base64
 import io.github.p1neapplexpress.openflux.data.Tunnel
+import io.github.p1neapplexpress.openflux.ui.AddEditTunnelViewModel
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -200,6 +201,27 @@ object TunnelLinkParser {
             val uid = el["maxUid"]?.jsonPrimitive?.contentOrNull
                 ?: el["uid"]?.jsonPrimitive?.contentOrNull
 
+            val extraList = mutableListOf<String>()
+            val payloadEl = el["transportConnPayload"]
+            if (payloadEl is JsonArray) {
+                val rawList = payloadEl.mapNotNull { it.jsonPrimitive.contentOrNull }
+                val extraStr = AddEditTunnelViewModel.extractExtraParams(rawList)
+                extraList.addAll(AddEditTunnelViewModel.parseCommandLineArguments(extraStr))
+            }
+            val extraArgsEl = el["extraArgs"] ?: el["args"] ?: el["extra_args"] ?: el["extraParams"]
+            if (extraArgsEl != null) {
+                if (extraArgsEl is JsonArray) {
+                    extraList.addAll(extraArgsEl.mapNotNull { it.jsonPrimitive.contentOrNull })
+                } else {
+                    val rawStr = extraArgsEl.jsonPrimitive.contentOrNull.orEmpty()
+                    extraList.addAll(AddEditTunnelViewModel.parseCommandLineArguments(rawStr))
+                }
+            }
+            val codec = el["codec"]?.jsonPrimitive?.contentOrNull
+            if (!codec.isNullOrEmpty() && extraList.none { it.startsWith("--codec", ignoreCase = true) }) {
+                extraList.add("--codec=$codec")
+            }
+
             val payload = buildList {
                 add("--role=client")
                 add("--transport")
@@ -219,6 +241,7 @@ object TunnelLinkParser {
                 if (!uid.isNullOrEmpty()) {
                     add("--maxUid"); add(uid)
                 }
+                addAll(AddEditTunnelViewModel.sanitizeExtraTokens(extraList))
             }
 
             Tunnel(
@@ -282,6 +305,11 @@ object TunnelLinkParser {
                 val uid = getArg("--maxUid").orEmpty()
                 val key = getArg("--encryption-key-file").orEmpty()
 
+                val extraStr = AddEditTunnelViewModel.extractExtraParams(tokens)
+                val extraTokens = AddEditTunnelViewModel.sanitizeExtraTokens(
+                    AddEditTunnelViewModel.parseCommandLineArguments(extraStr)
+                )
+
                 val payload = buildList {
                     add("--role=client")
                     add("--transport")
@@ -297,6 +325,7 @@ object TunnelLinkParser {
                     }
                     if (token.isNotEmpty()) { add("--maxToken"); add(token) }
                     if (uid.isNotEmpty()) { add("--maxUid"); add(uid) }
+                    addAll(extraTokens)
                 }
                 tunnel = Tunnel(
                     id = System.currentTimeMillis() * 1000L + kotlin.random.Random.nextLong(1000L),
@@ -497,6 +526,16 @@ object TunnelLinkParser {
                     io.github.p1neapplexpress.openflux.data.TransportType.mailru -> "Mail.ru Docs"
                     else -> "Yandex Docs"
                 }
+                val codec = param("codec")
+                val extraArgsParam = param("extraArgs") ?: param("args") ?: param("extra")
+                val extraFromUri = mutableListOf<String>()
+                if (!codec.isNullOrBlank()) {
+                    extraFromUri.add("--codec=$codec")
+                }
+                if (!extraArgsParam.isNullOrBlank()) {
+                    extraFromUri.addAll(AddEditTunnelViewModel.parseCommandLineArguments(extraArgsParam))
+                }
+
                 val payload = buildList {
                     add("--role=client")
                     add("--transport")
@@ -516,6 +555,7 @@ object TunnelLinkParser {
                     if (!uid.isNullOrBlank()) {
                         add("--maxUid"); add(uid)
                     }
+                    addAll(AddEditTunnelViewModel.sanitizeExtraTokens(extraFromUri))
                 }
                 tunnel = Tunnel(
                     id = System.currentTimeMillis() * 1000L + kotlin.random.Random.nextLong(1000L),
@@ -528,7 +568,7 @@ object TunnelLinkParser {
         }
 
         if (tunnel != null && context != null) {
-            ensureLocalKeyFile(context, tunnel!!)
+            ensureLocalKeyFile(context, tunnel)
         } else {
             tunnel
         }

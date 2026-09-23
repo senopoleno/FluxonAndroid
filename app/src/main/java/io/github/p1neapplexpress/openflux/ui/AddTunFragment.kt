@@ -75,6 +75,8 @@ class AddTunFragment : BaseFragment() {
         val maxUid = view.findViewById<TextView>(R.id.maxUserId)
         val name = view.findViewById<TextView>(R.id.name)
         val encryptionKey = view.findViewById<TextView>(R.id.encryptionKey)
+        val extraParamsContainer = view.findViewById<TextInputLayout>(R.id.extraParamsContainer)
+        val extraParams = view.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.extraParams)
         val save = view.findViewById<Button>(R.id.saveButton)
 
         btnBack.setOnClickListener {
@@ -93,6 +95,7 @@ class AddTunFragment : BaseFragment() {
         maxToken.doAfterTextChanged { maxTokenContainer.clearError() }
         maxUid.doAfterTextChanged { maxUserIdContainer.clearError() }
         encryptionKey.doAfterTextChanged { encryptionKeyContainer.clearError() }
+        extraParams.doAfterTextChanged { extraParamsContainer.clearError() }
 
         fun updateTransportUi(type: TransportType) {
             transport = type
@@ -174,6 +177,11 @@ class AddTunFragment : BaseFragment() {
                 }
             }
 
+            val extra = AddEditTunnelViewModel.extractExtraParams(t.transportConnPayload)
+            if (extra.isNotEmpty()) {
+                extraParams.setText(extra)
+            }
+
             save.text = getString(R.string.save)
         } ?: run {
             toolbarTitle.text = getString(R.string.enter_manually)
@@ -244,7 +252,8 @@ class AddTunFragment : BaseFragment() {
                 docUrl = docUrl.text?.toString().orEmpty(),
                 maxToken = maxToken.text?.toString().orEmpty(),
                 maxUid = maxUid.text?.toString().orEmpty(),
-                encryptionKey = encryptionKey.text?.toString().orEmpty()
+                encryptionKey = encryptionKey.text?.toString().orEmpty(),
+                extraParams = extraParams.text?.toString().orEmpty()
             )
         }
     }

@@ -477,5 +477,9 @@
     <string name="manual_section_general">General</string>
     <string name="manual_section_transport">Transport Configuration</string>
     <string name="manual_section_security">Security</string>
+    <string name="manual_section_extra">Extra Parameters</string>
+    <string name="extra_params">OpenFlux parameters</string>
+    <string name="extra_params_hint">e.g. --codec=legacy --mode=l3</string>
+    <string name="extra_params_helper">Additional command-line flags passed directly to OpenFlux core</string>
     <string name="manual_url_helper">Multiple URLs separated by comma or newline for multi-lane failover</string>
 </resources>

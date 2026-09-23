@@ -28,6 +28,7 @@ data class AddEditFormState(
     val maxToken: String = "",
     val maxUid: String = "",
     val encryptionKey: String = "",
+    val extraParams: String = "",
     val isEditing: Boolean = false,
     val isSaving: Boolean = false
 )
@@ -91,6 +92,8 @@ class AddEditTunnelViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
 
+            val extraParams = extractExtraParams(tunnel.transportConnPayload)
+
             _formState.value = AddEditFormState(
                 id = tunnel.id,
                 name = tunnel.name,
@@ -99,6 +102,7 @@ class AddEditTunnelViewModel(app: Application) : AndroidViewModel(app) {
                 maxToken = maxToken,
                 maxUid = maxUid,
                 encryptionKey = encKey,
+                extraParams = extraParams,
                 isEditing = true
             )
         }
@@ -113,7 +117,8 @@ class AddEditTunnelViewModel(app: Application) : AndroidViewModel(app) {
         docUrl: String,
         maxToken: String,
         maxUid: String,
-        encryptionKey: String
+        encryptionKey: String,
+        extraParams: String = ""
     ) {
         val trimmedName = name.trim()
         if (trimmedName.isEmpty()) {
@@ -240,7 +245,8 @@ class AddEditTunnelViewModel(app: Application) : AndroidViewModel(app) {
                 null
             }
 
-            val payload = buildPayload(currentTransport, trimmedUrl, trimmedToken, trimmedUid, keyFile)
+            val extraTokens = sanitizeExtraTokens(parseCommandLineArguments(extraParams))
+            val payload = buildPayload(currentTransport, trimmedUrl, trimmedToken, trimmedUid, keyFile, extraTokens)
             val newTunnel = Tunnel(
                 id = id,
                 name = trimmedName,
@@ -259,7 +265,8 @@ class AddEditTunnelViewModel(app: Application) : AndroidViewModel(app) {
         docUrl: String,
         maxToken: String,
         maxUid: String,
-        keyFile: File?
+        keyFile: File?,
+        extraTokens: List<String> = emptyList()
     ): List<String> = buildList {
         when (transport) {
             TransportType.yandex -> {
@@ -300,10 +307,149 @@ class AddEditTunnelViewModel(app: Application) : AndroidViewModel(app) {
             add("--encryption-key-file")
             add(it.absolutePath)
         }
+        addAll(extraTokens)
     }
 
     private fun argValue(payload: List<String>, key: String): String {
-        val idx = payload.indexOf(key)
+        val eqPrefix = "$key="
+        for (item in payload) {
+            if (item.startsWith(eqPrefix, ignoreCase = true)) {
+                return item.substring(eqPrefix.length).trim('"', '\'')
+            }
+        }
+        val idx = payload.indexOfFirst { it.equals(key, ignoreCase = true) }
         return if (idx >= 0 && idx + 1 < payload.size) payload[idx + 1] else ""
+    }
+
+    companion object {
+        private val MANAGED_FLAGS_WITH_VALUE = setOf(
+            "--transport", "-transport",
+            "--url", "-url",
+            "--urls", "-urls",
+            "--maxToken", "-maxToken",
+            "--maxUid", "-maxUid",
+            "--encryption-key-file", "-encryption-key-file",
+            "--socks5", "-socks5",
+            "--socks5-user", "-socks5-user",
+            "--socks5-pass", "-socks5-pass",
+            "--domain-rules-file", "-domain-rules-file",
+            "--doh-url", "-doh-url",
+            "--doh", "-doh",
+            "--tun-fd", "-tun-fd",
+            "--tun-socket", "-tun-socket",
+            "--tun-mtu", "-tun-mtu"
+        )
+
+        fun extractExtraParams(payload: List<String>): String {
+            if (payload.isEmpty()) return ""
+            val extra = mutableListOf<String>()
+            var i = 0
+            while (i < payload.size) {
+                val token = payload[i]
+
+                if (token.startsWith("--role=", ignoreCase = true) || token.startsWith("-role=", ignoreCase = true)) {
+                    i++
+                    continue
+                }
+                if (token.equals("--role", ignoreCase = true) || token.equals("-role", ignoreCase = true)) {
+                    i++
+                    if (i < payload.size && !payload[i].startsWith("-")) i++
+                    continue
+                }
+
+                val isManagedEq = MANAGED_FLAGS_WITH_VALUE.any { token.startsWith("$it=", ignoreCase = true) }
+                if (isManagedEq) {
+                    i++
+                    continue
+                }
+
+                val matchingManaged = MANAGED_FLAGS_WITH_VALUE.firstOrNull { it.equals(token, ignoreCase = true) }
+                if (matchingManaged != null) {
+                    i++
+                    if (i < payload.size && !payload[i].startsWith("-")) {
+                        i++
+                    }
+                    continue
+                }
+
+                extra.add(token)
+                i++
+            }
+
+            return extra.joinToString(" ") { token ->
+                if (token.contains(' ') || token.contains('\t')) {
+                    "\"${token.replace("\"", "\\\"")}\""
+                } else {
+                    token
+                }
+            }
+        }
+
+        fun parseCommandLineArguments(input: String): List<String> {
+            if (input.isBlank()) return emptyList()
+            val tokens = mutableListOf<String>()
+            val current = StringBuilder()
+            var inDoubleQuote = false
+            var inSingleQuote = false
+            var escape = false
+
+            for (ch in input) {
+                if (escape) {
+                    current.append(ch)
+                    escape = false
+                    continue
+                }
+                if (ch == '\\') {
+                    escape = true
+                    continue
+                }
+                if (ch == '"' && !inSingleQuote) {
+                    inDoubleQuote = !inDoubleQuote
+                    continue
+                }
+                if (ch == '\'' && !inDoubleQuote) {
+                    inSingleQuote = !inSingleQuote
+                    continue
+                }
+                if (ch.isWhitespace() && !inDoubleQuote && !inSingleQuote) {
+                    if (current.isNotEmpty()) {
+                        tokens.add(current.toString())
+                        current.clear()
+                    }
+                    continue
+                }
+                current.append(ch)
+            }
+            if (current.isNotEmpty()) {
+                tokens.add(current.toString())
+            }
+            return tokens
+        }
+
+        fun sanitizeExtraTokens(tokens: List<String>): List<String> {
+            val result = mutableListOf<String>()
+            var i = 0
+            val disallowedPrefixes = setOf(
+                "--role", "-role",
+                "--transport", "-transport",
+                "--encryption-key-file", "-encryption-key-file",
+                "--tun-fd", "--tun-socket", "--inbound", "--outbound"
+            )
+            while (i < tokens.size) {
+                val t = tokens[i]
+                val eqIdx = t.indexOf('=')
+                val key = if (eqIdx != -1) t.substring(0, eqIdx).lowercase() else t.lowercase()
+                if (key in disallowedPrefixes) {
+                    i++
+                    if (eqIdx == -1 && i < tokens.size && !tokens[i].startsWith("-")) {
+                        i++
+                    }
+                    continue
+                }
+                result.add(t)
+                i++
+            }
+            return result
+        }
     }
 }
