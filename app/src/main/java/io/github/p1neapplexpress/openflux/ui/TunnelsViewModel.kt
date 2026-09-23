@@ -151,7 +151,23 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
     private var healthCheckJob: Job? = null
     private var connectionJob: Job? = null
 
+    private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == "auto_failover") {
+            val appSettings = io.github.p1neapplexpress.openflux.util.AppSettings(getApplication())
+            if (!appSettings.autoFailover) {
+                if (failoverJob?.isActive == true) {
+                    failoverJob?.cancel()
+                    failoverJob = null
+                    Logx.i(TAG, "Failover cancelled immediately: disabled in settings")
+                    EventBus.dispatch(AppEvent.LogMessage("[I] Failover отменен: отключен в настройках"))
+                }
+            }
+        }
+    }
+
     init {
+        getApplication<Application>().getSharedPreferences("fluxon_app_settings", Context.MODE_PRIVATE)
+            .registerOnSharedPreferenceChangeListener(prefListener)
         repo.load().forEach { t ->
             val saved = loadSavedHealth(t.id)
             if (saved != TunnelHealth.UNKNOWN) {
@@ -655,10 +671,17 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         if (failoverJob?.isActive == true) return
 
         failoverJob = viewModelScope.launch(Dispatchers.Main) {
-            Logx.i(TAG, "Failover scheduled: waiting 30s before switching from '${failedTunnel.name}' to '${nextTunnel.name}'")
-            EventBus.dispatch(io.github.p1neapplexpress.openflux.event.AppEvent.LogMessage("[I] Failover: ожидание 30 сек перед переключением с '${failedTunnel.name}'..."))
+            Logx.i(TAG, "Failover scheduled: waiting 15s before switching from '${failedTunnel.name}' to '${nextTunnel.name}'")
+            EventBus.dispatch(io.github.p1neapplexpress.openflux.event.AppEvent.LogMessage("[I] Failover: ожидание 15 сек перед переключением с '${failedTunnel.name}'..."))
 
-            kotlinx.coroutines.delay(30_000L)
+            kotlinx.coroutines.delay(15_000L)
+
+            val currentSettings = io.github.p1neapplexpress.openflux.util.AppSettings(getApplication())
+            if (!currentSettings.autoFailover) {
+                Logx.i(TAG, "Failover cancelled: auto-failover disabled in settings")
+                failoverJob = null
+                return@launch
+            }
 
             val curActive = _active.value
             val isCurrentDead = !curActive.isActive || _tunnelHealth.value == TunnelHealth.UNAVAILABLE
@@ -861,6 +884,10 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         healthCheckJob = null
         failoverJob?.cancel()
         failoverJob = null
+        try {
+            getApplication<Application>().getSharedPreferences("fluxon_app_settings", Context.MODE_PRIVATE)
+                .unregisterOnSharedPreferenceChangeListener(prefListener)
+        } catch (_: Exception) {}
         try { getApplication<Application>().unbindService(connection) } catch (_: Exception) {}
     }
 }

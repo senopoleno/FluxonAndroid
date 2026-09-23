@@ -212,7 +212,8 @@ class SocksVpnService : android.net.VpnService() {
                     is AppEvent.TransportDisconnected -> {
                         if (vpn.isRunning.get() && !alreadyStopping.get()) {
                             reconnectJob?.cancel()
-                            val rotated = rotateActivePayloadLanes()
+                            val appSettings = AppSettings(applicationContext)
+                            val rotated = if (appSettings.autoFailover) rotateActivePayloadLanes() else null
                             val payloadToUse = rotated?.toList() ?: currentTransportPayload.toList()
 
                             if (rotated != null || reconnectAttempts < maxReconnectAttempts) {

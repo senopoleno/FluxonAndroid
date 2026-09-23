@@ -201,11 +201,16 @@ class NativeProcessSupervisor(private val context: Context) {
 
                             // 1. Detect critical transport startup errors (ignore client proxy/routing lines)
                             if (!connected.get() && !l.contains("[ROUTER]") && !l.contains("[SOCKS5]")) {
+                                val isCaptchaOrAuthError = l.contains("showcaptchafast", ignoreCase = true) ||
+                                        l.contains("SmartCaptcha", ignoreCase = true) ||
+                                        l.contains("fetchDocInfo failed", ignoreCase = true) ||
+                                        l.contains("looks like a login page", ignoreCase = true)
                                 if (l.contains("Failed to start transport", ignoreCase = true) ||
                                     l.contains("panic:", ignoreCase = true) ||
                                     l.contains("Unknown transport type", ignoreCase = true) ||
                                     l.contains("flag provided but not defined", ignoreCase = true) ||
-                                    l.contains("close 1005", ignoreCase = true)
+                                    l.contains("close 1005", ignoreCase = true) ||
+                                    isCaptchaOrAuthError
                                 ) {
                                     delayedConnectRunnable?.let { handler.removeCallbacks(it) }
                                     delayedConnectRunnable = null
@@ -214,7 +219,12 @@ class NativeProcessSupervisor(private val context: Context) {
                                     connected.set(false)
                                     running.set(false)
                                     EventBus.dispatch(AppEvent.TransportDisconnected)
-                                    EventBus.dispatch(AppEvent.LogMessage("[E] Transport error: $l"))
+                                    val errMsg = if (isCaptchaOrAuthError) {
+                                        "[E] Ошибка авторизации: капча/проверка Yandex Docs (showcaptchafast)"
+                                    } else {
+                                        "[E] Transport error: $l"
+                                    }
+                                    EventBus.dispatch(AppEvent.LogMessage(errMsg))
                                     Logx.e(TAG, "Transport error detected: $l")
                                     continue
                                 }
@@ -228,10 +238,7 @@ class NativeProcessSupervisor(private val context: Context) {
                                 l.contains("*** CONNECTED! ***", ignoreCase = true) ||
                                 l.contains("Signaling connected", ignoreCase = true) ||
                                 (l.contains("[VOLGA]", ignoreCase = true) && l.contains("transport started", ignoreCase = true)) ||
-                                (l.contains("[CUPS]", ignoreCase = true) && l.contains("transport started", ignoreCase = true)) ||
-                                l.contains("Running as CLIENT", ignoreCase = true) ||
-                                l.contains("Tunnel active", ignoreCase = true) ||
-                                l.contains("Direct TUN FD", ignoreCase = true)
+                                (l.contains("[CUPS]", ignoreCase = true) && l.contains("transport started", ignoreCase = true))
                             ) {
                                 gracePeriodRunnable?.let { handler.removeCallbacks(it) }
                                 gracePeriodRunnable = null
@@ -275,7 +282,9 @@ class NativeProcessSupervisor(private val context: Context) {
                             val isDebugLine = (isPacketLog || l.contains("[D]") || l.contains("[DEBUG]", ignoreCase = true)) && !isRoutingLog
                             val isWarnLine = l.contains("[W]") || l.contains("warning", ignoreCase = true)
                             val isErrorLine = l.contains("[E]") || l.contains("error", ignoreCase = true) ||
-                                    l.contains("panic:", ignoreCase = true) || l.contains("Failed to start", ignoreCase = true)
+                                    l.contains("panic:", ignoreCase = true) || l.contains("Failed to start", ignoreCase = true) ||
+                                    l.contains("fetchDocInfo failed", ignoreCase = true) || l.contains("showcaptchafast", ignoreCase = true) ||
+                                    l.contains("looks like a login page", ignoreCase = true)
 
                             val allowLog = when (effLogLevel) {
                                 "DEBUG" -> true
