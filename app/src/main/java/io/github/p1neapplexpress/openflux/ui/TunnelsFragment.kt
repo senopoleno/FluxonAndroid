@@ -710,27 +710,47 @@ class TunnelsFragment : BaseFragment() {
     }
 
     private fun showItemContextMenu(anchor: View, tunnel: Tunnel) {
-        val inflater = LayoutInflater.from(requireContext())
-        val menuView = inflater.inflate(R.layout.popup_item_menu, null)
+        val dialog = BottomSheetDialog(requireContext())
+        val view = layoutInflater.inflate(R.layout.bottom_sheet_config_options, null)
+        dialog.setContentView(view)
 
-        val menu = PopupWindow(
-            menuView,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            true
-        ).apply {
-            elevation = 12f
-            isOutsideTouchable = true
-            isFocusable = true
-            setBackgroundDrawable(
-                ContextCompat.getDrawable(requireContext(), R.drawable.bg_menu_popup)
-            )
+        val nameView = view.findViewById<TextView>(R.id.sheet_config_name)
+        val subView = view.findViewById<TextView>(R.id.sheet_config_subtitle)
+        val iconView = view.findViewById<ImageView>(R.id.sheet_config_icon)
+
+        nameView.text = tunnel.name
+        when (TransportType.from(tunnel.transportType)) {
+            TransportType.yandex -> {
+                iconView.imageTintList = null
+                iconView.setImageResource(R.drawable.yandex_docs)
+                subView.text = getString(R.string.yandex_docs_backend)
+            }
+            TransportType.vyandex -> {
+                iconView.imageTintList = null
+                iconView.setImageResource(R.drawable.volga)
+                subView.text = getString(R.string.vyandex_backend)
+            }
+            TransportType.max -> {
+                iconView.setImageResource(R.drawable.max_msg)
+                iconView.imageTintList = ContextCompat.getColorStateList(requireContext(), R.color.text_primary)
+                subView.text = getString(R.string.max_messenger_backend)
+            }
+            TransportType.cups -> {
+                iconView.imageTintList = null
+                iconView.setImageResource(R.drawable.ic_cups)
+                subView.text = getString(R.string.cups_backend)
+            }
+            TransportType.mailru -> {
+                iconView.imageTintList = null
+                iconView.setImageResource(R.drawable.ic_mailru)
+                subView.text = getString(R.string.mailru_backend)
+            }
         }
 
-        menuView.findViewById<View>(R.id.menu_edit).setOnClickListener {
-            menu.dismiss()
+        view.findViewById<View>(R.id.menu_edit).setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
+            dialog.dismiss()
             configSheetDialog?.dismiss()
-            popup?.dismiss()
             parentFragmentManager.beginTransaction()
                 .setCustomAnimations(
                     R.anim.slide_in_bottom,
@@ -743,54 +763,20 @@ class TunnelsFragment : BaseFragment() {
                 .commit()
         }
 
-        menuView.findViewById<View>(R.id.menu_share_qr)?.setOnClickListener {
-            menu.dismiss()
+        view.findViewById<View>(R.id.menu_share_qr)?.setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
+            dialog.dismiss()
             configSheetDialog?.dismiss()
-            popup?.dismiss()
             QrShareDialog.show(requireContext(), tunnel)
         }
 
-        menuView.findViewById<View>(R.id.menu_delete).setOnClickListener {
-            menu.dismiss()
+        view.findViewById<View>(R.id.menu_delete).setOnClickListener {
+            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
+            dialog.dismiss()
             confirmDelete(tunnel)
         }
 
-        menuView.measure(
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-        )
-        val menuWidth = menuView.measuredWidth
-        val menuHeight = menuView.measuredHeight
-
-        val location = IntArray(2)
-        anchor.getLocationOnScreen(location)
-        val anchorY = location[1]
-        val screenHeight = resources.displayMetrics.heightPixels
-        val density = resources.displayMetrics.density
-
-        val xOff = -(menuWidth - anchor.width)
-        val spaceBelow = screenHeight - (anchorY + anchor.height)
-        val margin = (20 * density).toInt()
-        val showAbove = spaceBelow < (menuHeight + margin)
-
-        val yOff = if (showAbove) {
-            -(anchor.height + menuHeight + (6 * density).toInt())
-        } else {
-            (4 * density).toInt()
-        }
-
-        menuView.alpha = 0f
-        menuView.translationY = if (showAbove) (8 * density) else -(8 * density)
-        menuView.scaleX = 0.96f
-        menuView.scaleY = 0.96f
-
-        menu.showAsDropDown(anchor, xOff, yOff)
-
-        menuView.animate()
-            .alpha(1f).translationY(0f).scaleX(1f).scaleY(1f)
-            .setDuration(160)
-            .setInterpolator(OvershootInterpolator(1.1f))
-            .start()
+        dialog.show()
     }
 
     private fun confirmDelete(tunnel: Tunnel) {

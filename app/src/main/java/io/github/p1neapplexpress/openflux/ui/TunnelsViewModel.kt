@@ -203,6 +203,7 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
                             service = null
                             activeTunnelData = null
                             io.github.p1neapplexpress.openflux.service.SocksVpnService.connectedAtRealtime = 0L
+                            io.github.p1neapplexpress.openflux.service.FluxonProxyService.connectedAtRealtime = 0L
                             _active.value = TunnelState.Idle
                             _rxSpeed.value = 0L
                             _txSpeed.value = 0L
@@ -249,6 +250,7 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
     private fun startTunnelInternal(tunnel: Tunnel) {
         Logx.i(TAG, "Starting tunnel: '${tunnel.name}' (transport: ${tunnel.transportType})")
         io.github.p1neapplexpress.openflux.service.SocksVpnService.connectedAtRealtime = 0L
+        io.github.p1neapplexpress.openflux.service.FluxonProxyService.connectedAtRealtime = 0L
         _uptimeSeconds.value = 0L
         _active.value = TunnelState.Connecting(tunnel)
         _tunnelHealth.value = TunnelHealth.CHECKING
@@ -353,7 +355,10 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
                 putExtra(Constants.INTENT_TRANSPORT_PAYLOAD, modifiedPayload.toTypedArray())
             }
             ContextCompat.startForegroundService(ctx, proxyIntent)
-            // FluxonProxyService has no IUnifiedService binder — health check via isProxyRunning
+            _active.value = TunnelState.Running(prepared)
+            _tunnelHealth.value = TunnelHealth.CHECKING
+            startUptimeCounter()
+            startHealthCheckLoop(prepared)
         } else {
             // ── Normal VPN mode: start SocksVpnService ────────────────────────
             ContextCompat.startForegroundService(ctx, intent)
@@ -417,6 +422,7 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (!preserveActiveState) {
             io.github.p1neapplexpress.openflux.service.SocksVpnService.connectedAtRealtime = 0L
+            io.github.p1neapplexpress.openflux.service.FluxonProxyService.connectedAtRealtime = 0L
             _active.value = TunnelState.Idle
             _rxSpeed.value = 0L
             _txSpeed.value = 0L
@@ -517,9 +523,10 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private suspend fun probeRunningTunnel(tunnel: Tunnel): Boolean = withContext(Dispatchers.IO) {
-        val svcRunning = runCatching {
-            service?.isFServiceRunning() == true && service?.isVpnRunning() == true
-        }.getOrDefault(false)
+        val svcRunning = io.github.p1neapplexpress.openflux.service.FluxonProxyService.isProxyRunning ||
+            runCatching {
+                service?.isFServiceRunning() == true && service?.isVpnRunning() == true
+            }.getOrDefault(false)
         if (!svcRunning) {
             return@withContext false
         }
@@ -532,7 +539,8 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun checkRunningHealthInternal(tunnel: Tunnel): Boolean {
-        val svcRunning = runCatching {
+        val isProxy = io.github.p1neapplexpress.openflux.service.FluxonProxyService.isProxyRunning
+        val svcRunning = isProxy || runCatching {
             service?.isFServiceRunning() == true && service?.isVpnRunning() == true
         }.getOrDefault(false)
 
@@ -544,8 +552,12 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
             return false
         }
 
-        val session = io.github.p1neapplexpress.openflux.util.LocalSocksSession.getActive()
-        if (session.port !in 1..65535) {
+        val sessionPort = if (isProxy && io.github.p1neapplexpress.openflux.service.FluxonProxyService.proxyPort in 1..65535) {
+            io.github.p1neapplexpress.openflux.service.FluxonProxyService.proxyPort
+        } else {
+            io.github.p1neapplexpress.openflux.util.LocalSocksSession.getActive().port
+        }
+        if (sessionPort !in 1..65535) {
             saveHealth(tunnel.id, TunnelHealth.UNAVAILABLE)
             _tunnelHealth.value = TunnelHealth.UNAVAILABLE
             pingCache.remove(tunnel.id)
@@ -556,7 +568,7 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         // 1. Verify that the local SOCKS proxy is listening and responsive
         val socksPortOpen = try {
             java.net.Socket().use { s ->
-                s.connect(java.net.InetSocketAddress("127.0.0.1", session.port), 1500)
+                s.connect(java.net.InetSocketAddress("127.0.0.1", sessionPort), 1500)
                 s.isConnected
             }
         } catch (_: Exception) {
@@ -571,7 +583,7 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         // 2. Verify true end-to-end connectivity through SOCKS5 proxy via bridge to remote VPS
-        val socksProxy = java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", session.port))
+        val socksProxy = java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", sessionPort))
         val latency = probeLiveConnectivityWithLatency(socksProxy)
         if (latency < 0) {
             saveHealth(tunnel.id, TunnelHealth.UNAVAILABLE)
@@ -705,7 +717,8 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun syncRunningServiceState() {
         val ctx = getApplication<Application>()
-        if (!bound) {
+        val isProxy = io.github.p1neapplexpress.openflux.service.FluxonProxyService.isProxyRunning
+        if (!isProxy && !bound) {
             try {
                 ctx.bindService(
                     Intent(ctx, io.github.p1neapplexpress.openflux.service.SocksVpnService::class.java),
@@ -716,10 +729,16 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
                 Logx.w(TAG, "bindService failed in syncRunningServiceState: ${e.message}")
             }
         }
-        val isRunning = runCatching { service?.isVpnRunning == true }.getOrDefault(false) ||
-                (io.github.p1neapplexpress.openflux.service.SocksVpnService.connectedAtRealtime > 0L)
+        val isRunning = isProxy ||
+                runCatching { service?.isVpnRunning == true }.getOrDefault(false) ||
+                (io.github.p1neapplexpress.openflux.service.SocksVpnService.connectedAtRealtime > 0L) ||
+                (io.github.p1neapplexpress.openflux.service.FluxonProxyService.connectedAtRealtime > 0L)
         if (isRunning) {
-            val tName = io.github.p1neapplexpress.openflux.service.SocksVpnService.activeTunnelName
+            val tName = if (isProxy) {
+                io.github.p1neapplexpress.openflux.service.FluxonProxyService.activeTunnelName
+            } else {
+                io.github.p1neapplexpress.openflux.service.SocksVpnService.activeTunnelName
+            }
             val tunnel = (if (!tName.isNullOrEmpty()) {
                 repo.load().firstOrNull { it.name == tName }
             } else null) ?: _selected.value ?: repo.getSelected()
@@ -731,7 +750,9 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
                 refresh()
             }
         } else {
-            if (_active.value is TunnelState.Running && (io.github.p1neapplexpress.openflux.service.SocksVpnService.connectedAtRealtime == 0L)) {
+            val noRealtime = (io.github.p1neapplexpress.openflux.service.SocksVpnService.connectedAtRealtime == 0L) &&
+                    (io.github.p1neapplexpress.openflux.service.FluxonProxyService.connectedAtRealtime == 0L)
+            if (_active.value is TunnelState.Running && noRealtime && !isProxy) {
                 _active.value = TunnelState.Idle
                 stopUptimeCounter()
                 healthCheckJob?.cancel()
@@ -745,11 +766,17 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         uptimeJob?.cancel()
         _uptimeSeconds.value = 0L
         uptimeJob = viewModelScope.launch {
-            val baseTime = if (io.github.p1neapplexpress.openflux.service.SocksVpnService.connectedAtRealtime > 0L) {
+            val baseTime = if (io.github.p1neapplexpress.openflux.service.FluxonProxyService.connectedAtRealtime > 0L) {
+                io.github.p1neapplexpress.openflux.service.FluxonProxyService.connectedAtRealtime
+            } else if (io.github.p1neapplexpress.openflux.service.SocksVpnService.connectedAtRealtime > 0L) {
                 io.github.p1neapplexpress.openflux.service.SocksVpnService.connectedAtRealtime
             } else {
                 android.os.SystemClock.elapsedRealtime().also {
-                    io.github.p1neapplexpress.openflux.service.SocksVpnService.connectedAtRealtime = it
+                    if (io.github.p1neapplexpress.openflux.service.FluxonProxyService.isProxyRunning) {
+                        io.github.p1neapplexpress.openflux.service.FluxonProxyService.connectedAtRealtime = it
+                    } else {
+                        io.github.p1neapplexpress.openflux.service.SocksVpnService.connectedAtRealtime = it
+                    }
                 }
             }
             while (isActive) {
@@ -778,7 +805,12 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 } else {
                     consecutiveFailures++
-                    if (service?.isFServiceRunning() != true || service?.isVpnRunning() != true || consecutiveFailures >= 2) {
+                    val isDead = if (io.github.p1neapplexpress.openflux.service.FluxonProxyService.isProxyRunning) {
+                        consecutiveFailures >= 2
+                    } else {
+                        service?.isFServiceRunning() != true || service?.isVpnRunning() != true || consecutiveFailures >= 2
+                    }
+                    if (isDead) {
                         _tunnelHealth.value = TunnelHealth.UNAVAILABLE
                         saveHealth(currentTunnel.id, TunnelHealth.UNAVAILABLE)
                         pingCache.remove(currentTunnel.id)

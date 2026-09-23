@@ -91,12 +91,6 @@ class DomainRulesPreferences(context: Context) {
             "copilot.microsoft.com"
         )
 
-        /**
-         * Комбинированный пресет «Все заблокированные ресурсы»
-         */
-        val PRESET_ALL_BLOCKED: Set<String> =
-            PRESET_BLOCKED_DOMAINS + PRESET_YOUTUBE_DOMAINS + PRESET_DISCORD_DOMAINS + PRESET_AI_DOMAINS
-
         fun getPresetRu(context: Context): Set<String> =
             loadAssetPreset(context, "preset_ru.txt", PRESET_RU_DOMAINS)
 
@@ -111,9 +105,6 @@ class DomainRulesPreferences(context: Context) {
 
         fun getPresetAi(context: Context): Set<String> =
             loadAssetPreset(context, "preset_ai.txt", PRESET_AI_DOMAINS)
-
-        fun getPresetAllBlocked(context: Context): Set<String> =
-            loadAssetPreset(context, "preset_all_blocked.txt", PRESET_ALL_BLOCKED)
     }
 
     private val prefs: SharedPreferences =

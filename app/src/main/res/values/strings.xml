@@ -308,8 +308,8 @@
     <string name="split_sites_preset_ru_desc">Yandex, VK, Gosuslugi, Mail.ru, banks, .ru, .рф</string>
     <string name="split_sites_preset_ru_badge">646 domains</string>
     <string name="split_sites_preset_blocked_title">Blocked Resources</string>
-    <string name="split_sites_preset_blocked_desc">Instagram, Twitter/X, Facebook, YouTube, Discord</string>
-    <string name="split_sites_preset_blocked_badge">1183 domains</string>
+    <string name="split_sites_preset_blocked_desc">Instagram, Twitter/X, Facebook, Rutracker, etc.</string>
+    <string name="split_sites_preset_blocked_badge">30 services</string>
     <string name="split_sites_preset_applied">Preset applied: %1$s</string>
     <string name="split_sites_domain_rule">Domain rule</string>
     <string name="split_sites_invalid_domain">Enter a valid domain name</string>
@@ -332,9 +332,6 @@
     <string name="split_sites_preset_ai_title">AI &amp; Neural Networks</string>
     <string name="split_sites_preset_ai_desc">ChatGPT, OpenAI, Claude, Anthropic, Midjourney, Perplexity</string>
     <string name="split_sites_preset_ai_badge">63 domains</string>
-    <string name="split_sites_preset_all_blocked_title">All Blocked (Full Pack)</string>
-    <string name="split_sites_preset_all_blocked_desc">YouTube + Discord + Social + AI + Torrents</string>
-    <string name="split_sites_preset_all_blocked_badge">1404 domains</string>
     <string name="split_deselect_all">Deselect all</string>
 
     <!-- New features (Revision 3) -->

@@ -56,7 +56,30 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     private val splitPrefs = SplitTunnelPreferences(app)
     private val domainPrefs = DomainRulesPreferences(app)
 
-    private val _uiState = MutableStateFlow(SettingsUiState())
+    private fun createInitialState(): SettingsUiState {
+        return SettingsUiState(
+            splitAppsCount = 0,
+            splitDomainsCount = domainPrefs.domains.size,
+            dnsSummary = computeDnsSummary(),
+            mtu = appSettings.mtu,
+            ipType = appSettings.ipType,
+            bypassLan = appSettings.bypassLan,
+            killSwitch = appSettings.killSwitch,
+            shareHotspot = appSettings.shareLanProxy,
+            socks5AuthEnabled = appSettings.socks5AuthEnabled,
+            proxyOnlyMode = appSettings.proxyOnlyMode,
+            autoFailover = appSettings.autoFailover,
+            autoBoot = appSettings.autoConnectOnBoot,
+            autoClearLogs = appSettings.autoClearLogs,
+            autoUpdate = appSettings.autoUpdateCheck,
+            isBatteryOptimized = false,
+            appIcon = AppIconManager.getCurrentIcon(getApplication()),
+            language = appSettings.appLanguage,
+            hapticFeedback = appSettings.hapticFeedback
+        )
+    }
+
+    private val _uiState = MutableStateFlow(createInitialState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
     private val _events = MutableSharedFlow<SettingsEvent>()

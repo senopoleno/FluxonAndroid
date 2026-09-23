@@ -308,8 +308,8 @@
     <string name="split_sites_preset_ru_desc">Яндекс, ВКонтакте, Госуслуги, Mail.ru, банки, .ru, .рф</string>
     <string name="split_sites_preset_ru_badge">646 доменов</string>
     <string name="split_sites_preset_blocked_title">Популярные заблокированные</string>
-    <string name="split_sites_preset_blocked_desc">Instagram, Twitter/X, Facebook, YouTube, Discord</string>
-    <string name="split_sites_preset_blocked_badge">1183 домена</string>
+    <string name="split_sites_preset_blocked_desc">Instagram, Twitter/X, Facebook, Rutracker, etc.</string>
+    <string name="split_sites_preset_blocked_badge">30 сервисов</string>
     <string name="split_sites_preset_applied">Пресет добавлен: %1$s</string>
     <string name="split_sites_domain_rule">Правило домена</string>
     <string name="split_sites_invalid_domain">Введите корректное доменное имя</string>
@@ -332,9 +332,6 @@
     <string name="split_sites_preset_ai_title">Нейросети и AI</string>
     <string name="split_sites_preset_ai_desc">ChatGPT, OpenAI, Claude, Anthropic, Midjourney, Perplexity</string>
     <string name="split_sites_preset_ai_badge">63 домена</string>
-    <string name="split_sites_preset_all_blocked_title">Все заблокированные (Комбо-пак)</string>
-    <string name="split_sites_preset_all_blocked_desc">YouTube + Discord + Соцсети + AI + Торренты</string>
-    <string name="split_sites_preset_all_blocked_badge">1404 домена</string>
     <string name="split_deselect_all">Снять всё</string>
 
     <!-- New features (Revision 3) -->

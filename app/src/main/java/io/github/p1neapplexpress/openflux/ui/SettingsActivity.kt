@@ -69,6 +69,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var switchAutoUpdate: MaterialSwitch
     private lateinit var textVersion: TextView
 
+    private var isBindingState = false
+
     private val exportBackupLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
@@ -144,69 +146,74 @@ class SettingsActivity : AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
                     vm.uiState.collect { state ->
-                        textSplitTunnelSummary.text = when {
-                            state.splitAppsCount == 0 && state.splitDomainsCount == 0 -> getString(R.string.settings_split_tunnel_none)
-                            else -> getString(R.string.split_summary_format, state.splitAppsCount, state.splitDomainsCount)
-                        }
-                        textDnsSummary.text = state.dnsSummary
-                        textMtuSummary.text = state.mtu.toString()
-                        textIpTypeSummary.text = when (state.ipType) {
-                            AppSettings.IP_TYPE_IPV4 -> getString(R.string.settings_ip_type_ipv4)
-                            AppSettings.IP_TYPE_IPV6 -> getString(R.string.settings_ip_type_ipv6)
-                            else -> getString(R.string.settings_ip_type_auto)
-                        }
-                        textLanguageSummary.text = when (state.language) {
-                            "ru" -> "Русский"
-                            "en" -> "English"
-                            else -> getString(R.string.settings_language_system)
-                        }
-                        textAppIconSummary.text = if (state.appIcon == AppIconManager.ICON_LIGHT) {
-                            getString(R.string.settings_icon_light)
-                        } else {
-                            getString(R.string.settings_icon_dark)
-                        }
-
-                        if (switchBypassLan.isChecked != state.bypassLan) {
-                            switchBypassLan.isChecked = state.bypassLan
-                        }
-                        if (switchHapticFeedback.isChecked != state.hapticFeedback) {
-                            switchHapticFeedback.isChecked = state.hapticFeedback
-                        }
-                        if (switchKillSwitch.isChecked != state.killSwitch) {
-                            switchKillSwitch.isChecked = state.killSwitch
-                        }
-                        if (switchHotspot.isChecked != state.shareHotspot) {
-                            switchHotspot.isChecked = state.shareHotspot
-                        }
-                        if (switchSocks5Auth.isChecked != state.socks5AuthEnabled) {
-                            switchSocks5Auth.isChecked = state.socks5AuthEnabled
-                        }
-                        val swProxyOnly = findViewById<MaterialSwitch?>(R.id.switch_proxy_only_mode)
-                        if (swProxyOnly != null && swProxyOnly.isChecked != state.proxyOnlyMode) {
-                            swProxyOnly.isChecked = state.proxyOnlyMode
-                        }
-                        if (switchFailover.isChecked != state.autoFailover) {
-                            switchFailover.isChecked = state.autoFailover
-                        }
-                        if (switchAutoBoot.isChecked != state.autoBoot) {
-                            switchAutoBoot.isChecked = state.autoBoot
-                        }
-                        if (switchAutoClearLogs.isChecked != state.autoClearLogs) {
-                            switchAutoClearLogs.isChecked = state.autoClearLogs
-                        }
-                        if (switchAutoUpdate.isChecked != state.autoUpdate) {
-                            switchAutoUpdate.isChecked = state.autoUpdate
-                        }
-
-                        val subBattery = findViewById<TextView>(R.id.text_battery_opt_subtitle)
-                        if (subBattery != null) {
-                            if (state.isBatteryOptimized) {
-                                subBattery.text = getString(R.string.battery_opt_disabled)
-                                subBattery.setTextColor(androidx.core.content.ContextCompat.getColor(this@SettingsActivity, R.color.colorSuccess))
-                            } else {
-                                subBattery.text = getString(R.string.battery_opt_enabled)
-                                subBattery.setTextColor(androidx.core.content.ContextCompat.getColor(this@SettingsActivity, R.color.text_secondary))
+                        isBindingState = true
+                        try {
+                            textSplitTunnelSummary.text = when {
+                                state.splitAppsCount == 0 && state.splitDomainsCount == 0 -> getString(R.string.settings_split_tunnel_none)
+                                else -> getString(R.string.split_summary_format, state.splitAppsCount, state.splitDomainsCount)
                             }
+                            textDnsSummary.text = state.dnsSummary
+                            textMtuSummary.text = state.mtu.toString()
+                            textIpTypeSummary.text = when (state.ipType) {
+                                AppSettings.IP_TYPE_IPV4 -> getString(R.string.settings_ip_type_ipv4)
+                                AppSettings.IP_TYPE_IPV6 -> getString(R.string.settings_ip_type_ipv6)
+                                else -> getString(R.string.settings_ip_type_auto)
+                            }
+                            textLanguageSummary.text = when (state.language) {
+                                "ru" -> "Русский"
+                                "en" -> "English"
+                                else -> getString(R.string.settings_language_system)
+                            }
+                            textAppIconSummary.text = if (state.appIcon == AppIconManager.ICON_LIGHT) {
+                                getString(R.string.settings_icon_light)
+                            } else {
+                                getString(R.string.settings_icon_dark)
+                            }
+
+                            if (switchBypassLan.isChecked != state.bypassLan) {
+                                switchBypassLan.isChecked = state.bypassLan
+                            }
+                            if (switchHapticFeedback.isChecked != state.hapticFeedback) {
+                                switchHapticFeedback.isChecked = state.hapticFeedback
+                            }
+                            if (switchKillSwitch.isChecked != state.killSwitch) {
+                                switchKillSwitch.isChecked = state.killSwitch
+                            }
+                            if (switchHotspot.isChecked != state.shareHotspot) {
+                                switchHotspot.isChecked = state.shareHotspot
+                            }
+                            if (switchSocks5Auth.isChecked != state.socks5AuthEnabled) {
+                                switchSocks5Auth.isChecked = state.socks5AuthEnabled
+                            }
+                            val swProxyOnly = findViewById<MaterialSwitch?>(R.id.switch_proxy_only_mode)
+                            if (swProxyOnly != null && swProxyOnly.isChecked != state.proxyOnlyMode) {
+                                swProxyOnly.isChecked = state.proxyOnlyMode
+                            }
+                            if (switchFailover.isChecked != state.autoFailover) {
+                                switchFailover.isChecked = state.autoFailover
+                            }
+                            if (switchAutoBoot.isChecked != state.autoBoot) {
+                                switchAutoBoot.isChecked = state.autoBoot
+                            }
+                            if (switchAutoClearLogs.isChecked != state.autoClearLogs) {
+                                switchAutoClearLogs.isChecked = state.autoClearLogs
+                            }
+                            if (switchAutoUpdate.isChecked != state.autoUpdate) {
+                                switchAutoUpdate.isChecked = state.autoUpdate
+                            }
+
+                            val subBattery = findViewById<TextView>(R.id.text_battery_opt_subtitle)
+                            if (subBattery != null) {
+                                if (state.isBatteryOptimized) {
+                                    subBattery.text = getString(R.string.battery_opt_disabled)
+                                    subBattery.setTextColor(androidx.core.content.ContextCompat.getColor(this@SettingsActivity, R.color.colorSuccess))
+                                } else {
+                                    subBattery.text = getString(R.string.battery_opt_enabled)
+                                    subBattery.setTextColor(androidx.core.content.ContextCompat.getColor(this@SettingsActivity, R.color.text_secondary))
+                                }
+                            }
+                        } finally {
+                            isBindingState = false
                         }
                     }
                 }
@@ -292,6 +299,7 @@ class SettingsActivity : AppCompatActivity() {
         switchBypassLan.isChecked = appSettings.bypassLan
         switchBypassLan.jumpDrawablesToCurrentState()
         switchBypassLan.setOnCheckedChangeListener { _, isChecked ->
+            if (isBindingState) return@setOnCheckedChangeListener
             vm.toggleBypassLan(isChecked)
         }
         switchBypassLan.setOnClickListener {
@@ -314,6 +322,7 @@ class SettingsActivity : AppCompatActivity() {
         switchHapticFeedback.isChecked = appSettings.hapticFeedback
         switchHapticFeedback.jumpDrawablesToCurrentState()
         switchHapticFeedback.setOnCheckedChangeListener { _, isChecked ->
+            if (isBindingState) return@setOnCheckedChangeListener
             vm.toggleHapticFeedback(isChecked)
         }
         switchHapticFeedback.setOnClickListener {
@@ -344,6 +353,7 @@ class SettingsActivity : AppCompatActivity() {
         switchKillSwitch.isChecked = appSettings.killSwitch
         switchKillSwitch.jumpDrawablesToCurrentState()
         switchKillSwitch.setOnCheckedChangeListener { _, isChecked ->
+            if (isBindingState) return@setOnCheckedChangeListener
             vm.toggleKillSwitch(isChecked)
         }
         switchKillSwitch.setOnClickListener {
@@ -358,6 +368,7 @@ class SettingsActivity : AppCompatActivity() {
         switchHotspot.isChecked = appSettings.shareLanProxy
         switchHotspot.jumpDrawablesToCurrentState()
         switchHotspot.setOnCheckedChangeListener { _, isChecked ->
+            if (isBindingState) return@setOnCheckedChangeListener
             vm.toggleHotspot(isChecked)
             if (isChecked) {
                 showHotspotBottomSheet()
@@ -375,6 +386,7 @@ class SettingsActivity : AppCompatActivity() {
         switchSocks5Auth.isChecked = appSettings.socks5AuthEnabled
         switchSocks5Auth.jumpDrawablesToCurrentState()
         switchSocks5Auth.setOnCheckedChangeListener { _, isChecked ->
+            if (isBindingState) return@setOnCheckedChangeListener
             vm.toggleSocks5Auth(isChecked)
         }
         switchSocks5Auth.setOnClickListener {
@@ -391,6 +403,7 @@ class SettingsActivity : AppCompatActivity() {
             sw.isChecked = appSettings.proxyOnlyMode
             sw.jumpDrawablesToCurrentState()
             sw.setOnCheckedChangeListener { _, isChecked ->
+                if (isBindingState) return@setOnCheckedChangeListener
                 vm.toggleProxyOnlyMode(isChecked)
             }
             sw.setOnClickListener { sw.performAppHaptics() }
@@ -404,6 +417,7 @@ class SettingsActivity : AppCompatActivity() {
         switchFailover.isChecked = appSettings.autoFailover
         switchFailover.jumpDrawablesToCurrentState()
         switchFailover.setOnCheckedChangeListener { _, isChecked ->
+            if (isBindingState) return@setOnCheckedChangeListener
             vm.toggleAutoFailover(isChecked)
         }
         switchFailover.setOnClickListener {
@@ -418,6 +432,7 @@ class SettingsActivity : AppCompatActivity() {
         switchAutoBoot.isChecked = appSettings.autoConnectOnBoot
         switchAutoBoot.jumpDrawablesToCurrentState()
         switchAutoBoot.setOnCheckedChangeListener { _, isChecked ->
+            if (isBindingState) return@setOnCheckedChangeListener
             vm.toggleAutoBoot(isChecked)
         }
         switchAutoBoot.setOnClickListener {
@@ -496,6 +511,7 @@ class SettingsActivity : AppCompatActivity() {
         switchAutoClearLogs.isChecked = appSettings.autoClearLogs
         switchAutoClearLogs.jumpDrawablesToCurrentState()
         switchAutoClearLogs.setOnCheckedChangeListener { _, isChecked ->
+            if (isBindingState) return@setOnCheckedChangeListener
             vm.toggleAutoClearLogs(isChecked)
         }
         switchAutoClearLogs.setOnClickListener {
@@ -523,6 +539,7 @@ class SettingsActivity : AppCompatActivity() {
         switchAutoUpdate.isChecked = appSettings.autoUpdateCheck
         switchAutoUpdate.jumpDrawablesToCurrentState()
         switchAutoUpdate.setOnCheckedChangeListener { _, isChecked ->
+            if (isBindingState) return@setOnCheckedChangeListener
             vm.toggleAutoUpdate(isChecked)
         }
         switchAutoUpdate.setOnClickListener {

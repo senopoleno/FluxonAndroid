@@ -62,6 +62,8 @@ class FluxonProxyService : Service() {
 
         @Volatile var isProxyRunning = false
         @Volatile var proxyPort = 0
+        @Volatile var activeTunnelName: String? = null
+        @Volatile var connectedAtRealtime: Long = 0L
     }
 
     private lateinit var supervisor: NativeProcessSupervisor
@@ -142,6 +144,8 @@ class FluxonProxyService : Service() {
 
             if (ready) {
                 isProxyRunning = true
+                activeTunnelName = tunnelName
+                connectedAtRealtime = android.os.SystemClock.elapsedRealtime()
                 EventBus.dispatch(AppEvent.LogMessage("[S] [PROXY] SOCKS5-прокси активен на 127.0.0.1:${session.port}"))
                 EventBus.dispatch(AppEvent.VpnConnected(tunnelName))
                 Logx.i(TAG, "Proxy mode active on port ${session.port}")
@@ -180,6 +184,8 @@ class FluxonProxyService : Service() {
         Logx.i(TAG, "stopProxy()")
         isProxyRunning = false
         proxyPort = 0
+        activeTunnelName = null
+        connectedAtRealtime = 0L
         EventBus.dispatch(AppEvent.VpnDisconnected)
         runCatching { HotspotProxyBridge.stop() }
         runCatching { supervisor.stop() }

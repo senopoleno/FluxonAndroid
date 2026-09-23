@@ -20,6 +20,7 @@ import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.view.animation.OvershootInterpolator
 import android.widget.PopupWindow
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
@@ -61,7 +62,7 @@ class LogsFragment : BaseFragment() {
     private lateinit var btnConnectionLogLevel: com.google.android.material.button.MaterialButton
 
     private var activeLogLevelPopup: PopupWindow? = null
-    private var activeMoreMenuPopup: PopupWindow? = null
+    private var activeMoreMenuDialog: BottomSheetDialog? = null
 
     private var autoScroll = true
     private val ts = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault())
@@ -277,8 +278,8 @@ class LogsFragment : BaseFragment() {
     override fun onDestroyView() {
         activeLogLevelPopup?.dismiss()
         activeLogLevelPopup = null
-        activeMoreMenuPopup?.dismiss()
-        activeMoreMenuPopup = null
+        activeMoreMenuDialog?.dismiss()
+        activeMoreMenuDialog = null
         textView.handler?.removeCallbacksAndMessages(null)
         pending.clear()
         super.onDestroyView()
@@ -366,22 +367,11 @@ class LogsFragment : BaseFragment() {
     }
 
     private fun showMoreMenu(anchor: View) {
-        activeMoreMenuPopup?.dismiss()
-        val inflater = LayoutInflater.from(requireContext())
-        val menuView = inflater.inflate(R.layout.popup_logs_more_menu, null)
-
-        val popup = PopupWindow(
-            menuView,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            true
-        ).apply {
-            elevation = 12f
-            isOutsideTouchable = true
-            isFocusable = true
-            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        }
-        activeMoreMenuPopup = popup
+        activeMoreMenuDialog?.dismiss()
+        val dialog = BottomSheetDialog(requireContext())
+        val menuView = layoutInflater.inflate(R.layout.bottom_sheet_logs_more, null)
+        dialog.setContentView(menuView)
+        activeMoreMenuDialog = dialog
 
         val checkAutoScroll = menuView.findViewById<View>(R.id.check_logs_autoscroll)
         checkAutoScroll?.isVisible = autoScroll
@@ -390,7 +380,7 @@ class LogsFragment : BaseFragment() {
             it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
             autoScroll = !autoScroll
             checkAutoScroll?.isVisible = autoScroll
-            popup.dismiss()
+            dialog.dismiss()
             if (autoScroll) {
                 scrollView.post { scrollView.fullScroll(View.FOCUS_DOWN) }
                 Toast.makeText(requireContext(), R.string.autoscroll_enabled, Toast.LENGTH_SHORT).show()
@@ -401,14 +391,14 @@ class LogsFragment : BaseFragment() {
 
         menuView.findViewById<View>(R.id.menu_logs_share)?.setOnClickListener {
             it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
-            popup.dismiss()
+            dialog.dismiss()
             flushPending(drainAll = true)
             showShareDialog()
         }
 
         menuView.findViewById<View>(R.id.menu_logs_clear)?.setOnClickListener {
             it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
-            popup.dismiss()
+            dialog.dismiss()
             EventBus.clearLogHistory()
             pending.clear()
             allLogItems.clear()
@@ -418,27 +408,7 @@ class LogsFragment : BaseFragment() {
             Toast.makeText(requireContext(), R.string.logs_cleared, Toast.LENGTH_SHORT).show()
         }
 
-        menuView.measure(
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-        )
-        val menuWidth = menuView.measuredWidth
-        val density = resources.displayMetrics.density
-
-        val xOff = -(menuWidth - anchor.width)
-        val yOff = (4 * density).toInt()
-
-        menuView.alpha = 0f
-        menuView.scaleX = 0.95f
-        menuView.scaleY = 0.95f
-
-        popup.showAsDropDown(anchor, xOff, yOff)
-
-        menuView.animate()
-            .alpha(1f).scaleX(1f).scaleY(1f)
-            .setDuration(160)
-            .setInterpolator(OvershootInterpolator(1.1f))
-            .start()
+        dialog.show()
     }
 
     private fun showShareDialog() {

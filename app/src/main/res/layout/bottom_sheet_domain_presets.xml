@@ -336,7 +336,7 @@
                 android:id="@+id/card_preset_ai"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
+                android:layout_marginBottom="14dp"
                 app:cardBackgroundColor="@color/m3_surface_container"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
@@ -391,77 +391,6 @@
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
                         android:text="@string/split_sites_preset_ai_badge"
-                        android:textColor="@color/m3_primary"
-                        android:textSize="11sp"
-                        android:fontFamily="sans-serif-medium"
-                        android:background="@drawable/bg_icon_badge"
-                        android:paddingHorizontal="7dp"
-                        android:paddingVertical="3dp" />
-
-                </LinearLayout>
-
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- Preset Card 6: All Blocked Combo Pack -->
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/card_preset_all_blocked"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="14dp"
-                app:cardBackgroundColor="@color/m3_surface_container"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp"
-                app:strokeColor="@color/m3_outline_variant"
-                app:strokeWidth="1dp"
-                android:clickable="true"
-                android:focusable="true">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:padding="14dp">
-
-                    <ImageView
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
-                        android:src="@drawable/ic_domain"
-                        app:tint="@color/m3_primary"
-                        android:background="@drawable/bg_icon_badge"
-                        android:padding="8dp"
-                        android:contentDescription="@null" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginStart="12dp"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="@string/split_sites_preset_all_blocked_title"
-                            android:textColor="@color/text_primary"
-                            android:textSize="14sp"
-                            android:fontFamily="sans-serif-bold" />
-
-                        <TextView
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="@string/split_sites_preset_all_blocked_desc"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="12sp" />
-
-                    </LinearLayout>
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:text="@string/split_sites_preset_all_blocked_badge"
                         android:textColor="@color/m3_primary"
                         android:textSize="11sp"
                         android:fontFamily="sans-serif-medium"

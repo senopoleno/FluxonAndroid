@@ -872,12 +872,6 @@ class SplitTunnelActivity : AppCompatActivity() {
             applyPreset(DomainRulesPreferences.getPresetAi(this), getString(R.string.split_sites_preset_ai_title))
         }
 
-        // 6. All Blocked Combo
-        view.findViewById<View>(R.id.card_preset_all_blocked).setOnClickListener {
-            it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)
-            applyPreset(DomainRulesPreferences.getPresetAllBlocked(this), getString(R.string.split_sites_preset_all_blocked_title))
-        }
-
         view.findViewById<View>(R.id.btn_cancel_preset).setOnClickListener {
             dialog.dismiss()
         }
