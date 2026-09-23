@@ -36,7 +36,7 @@ data class SettingsUiState(
     val proxyOnlyMode: Boolean = false,
     val autoFailover: Boolean = false,
     val autoBoot: Boolean = false,
-    val autoClearLogs: Boolean = false,
+    val autoClearLogs: Boolean = true,
     val autoUpdate: Boolean = true,
     val isBatteryOptimized: Boolean = false,
     val appIcon: String = AppIconManager.ICON_DARK,

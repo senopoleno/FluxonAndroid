@@ -29,6 +29,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -146,6 +147,7 @@ class FluxonProxyService : Service() {
                 isProxyRunning = true
                 activeTunnelName = tunnelName
                 connectedAtRealtime = android.os.SystemClock.elapsedRealtime()
+                startSpeedUpdates()
                 EventBus.dispatch(AppEvent.LogMessage("[S] [PROXY] SOCKS5-прокси активен на 127.0.0.1:${session.port}"))
                 EventBus.dispatch(AppEvent.VpnConnected(tunnelName))
                 Logx.i(TAG, "Proxy mode active on port ${session.port}")
@@ -179,9 +181,52 @@ class FluxonProxyService : Service() {
         super.onDestroy()
     }
 
+    private var speedJob: kotlinx.coroutines.Job? = null
+
+    private fun startSpeedUpdates() {
+        speedJob?.cancel()
+        speedJob = serviceScope.launch(Dispatchers.IO) {
+            val uid = Process.myUid()
+            var lastRxBytes = TrafficStats.getUidRxBytes(uid)
+            var lastTxBytes = TrafficStats.getUidTxBytes(uid)
+            var lastSampleAt = android.os.SystemClock.elapsedRealtime()
+
+            while (isActive && isProxyRunning) {
+                kotlinx.coroutines.delay(1000L)
+                val now = android.os.SystemClock.elapsedRealtime()
+                val elapsedMs = (now - lastSampleAt).coerceAtLeast(1)
+                val rawRx = TrafficStats.getUidRxBytes(uid)
+                val rawTx = TrafficStats.getUidTxBytes(uid)
+                val rxBytes = if (rawRx != TrafficStats.UNSUPPORTED.toLong()) rawRx else lastRxBytes
+                val txBytes = if (rawTx != TrafficStats.UNSUPPORTED.toLong()) rawTx else lastTxBytes
+
+                val rxPerSec = if (lastRxBytes > 0 && rxBytes >= lastRxBytes) {
+                    (rxBytes - lastRxBytes) * 1000 / elapsedMs
+                } else 0L
+
+                val txPerSec = if (lastTxBytes > 0 && txBytes >= lastTxBytes) {
+                    (txBytes - lastTxBytes) * 1000 / elapsedMs
+                } else 0L
+
+                lastRxBytes = rxBytes
+                lastTxBytes = txBytes
+                lastSampleAt = now
+
+                EventBus.dispatch(AppEvent.SpeedUpdate(rxPerSec, txPerSec))
+            }
+        }
+    }
+
+    private fun stopSpeedUpdates() {
+        speedJob?.cancel()
+        speedJob = null
+        EventBus.dispatch(AppEvent.SpeedUpdate(0L, 0L))
+    }
+
     private fun stopProxy() {
         if (alreadyStopping.getAndSet(true)) return
         Logx.i(TAG, "stopProxy()")
+        stopSpeedUpdates()
         isProxyRunning = false
         proxyPort = 0
         activeTunnelName = null

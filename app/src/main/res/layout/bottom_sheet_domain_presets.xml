@@ -69,12 +69,10 @@
                     android:padding="14dp">
 
                     <ImageView
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
                         android:src="@drawable/ic_domain"
                         app:tint="@color/m3_primary"
-                        android:background="@drawable/bg_icon_badge"
-                        android:padding="8dp"
                         android:contentDescription="@null" />
 
                     <LinearLayout
@@ -140,12 +138,10 @@
                     android:padding="14dp">
 
                     <ImageView
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
                         android:src="@drawable/ic_domain"
                         app:tint="@color/m3_primary"
-                        android:background="@drawable/bg_icon_badge"
-                        android:padding="8dp"
                         android:contentDescription="@null" />
 
                     <LinearLayout
@@ -211,12 +207,10 @@
                     android:padding="14dp">
 
                     <ImageView
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
                         android:src="@drawable/ic_domain"
                         app:tint="@color/m3_primary"
-                        android:background="@drawable/bg_icon_badge"
-                        android:padding="8dp"
                         android:contentDescription="@null" />
 
                     <LinearLayout
@@ -282,12 +276,10 @@
                     android:padding="14dp">
 
                     <ImageView
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
                         android:src="@drawable/ic_domain"
                         app:tint="@color/m3_primary"
-                        android:background="@drawable/bg_icon_badge"
-                        android:padding="8dp"
                         android:contentDescription="@null" />
 
                     <LinearLayout
@@ -353,12 +345,10 @@
                     android:padding="14dp">
 
                     <ImageView
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
                         android:src="@drawable/ic_domain"
                         app:tint="@color/m3_primary"
-                        android:background="@drawable/bg_icon_badge"
-                        android:padding="8dp"
                         android:contentDescription="@null" />
 
                     <LinearLayout

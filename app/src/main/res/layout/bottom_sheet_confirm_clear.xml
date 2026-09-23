@@ -18,21 +18,13 @@
         android:background="@drawable/bg_drag_handle"
         android:layout_marginBottom="20dp" />
 
-    <!-- Centered Delete Icon Badge -->
-    <FrameLayout
-        android:layout_width="56dp"
-        android:layout_height="56dp"
-        android:background="@drawable/bg_delete_icon_badge">
-
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:layout_gravity="center"
-            android:src="@drawable/ic_delete"
-            app:tint="@color/state_error"
-            android:contentDescription="@null" />
-
-    </FrameLayout>
+    <!-- Centered Delete Icon -->
+    <ImageView
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:src="@drawable/ic_delete"
+        app:tint="@color/state_error"
+        android:contentDescription="@null" />
 
     <!-- Centered Title -->
     <TextView

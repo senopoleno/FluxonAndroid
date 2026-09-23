@@ -377,8 +377,9 @@ class TunnelsFragment : BaseFragment() {
                 launch { vm.uptimeSeconds.collect { renderUptime(it) } }
                 launch { vm.selected.collect { renderSelected(it) } }
                 launch {
-                    combine(vm.rxSpeed, vm.txSpeed) { rx, tx -> Pair(rx, tx) }
-                        .collect { (rx, tx) -> renderSpeed(rx, tx) }
+                    vm.speedSample.collect { sample ->
+                        renderSpeed(sample.rxSpeed, sample.txSpeed)
+                    }
                 }
                 launch { vm.tunnelHealth.collect { renderHealth(it) } }
                 launch { vm.pingMap.collect { updateConfigPing() } }
@@ -713,39 +714,6 @@ class TunnelsFragment : BaseFragment() {
         val dialog = BottomSheetDialog(requireContext())
         val view = layoutInflater.inflate(R.layout.bottom_sheet_config_options, null)
         dialog.setContentView(view)
-
-        val nameView = view.findViewById<TextView>(R.id.sheet_config_name)
-        val subView = view.findViewById<TextView>(R.id.sheet_config_subtitle)
-        val iconView = view.findViewById<ImageView>(R.id.sheet_config_icon)
-
-        nameView.text = tunnel.name
-        when (TransportType.from(tunnel.transportType)) {
-            TransportType.yandex -> {
-                iconView.imageTintList = null
-                iconView.setImageResource(R.drawable.yandex_docs)
-                subView.text = getString(R.string.yandex_docs_backend)
-            }
-            TransportType.vyandex -> {
-                iconView.imageTintList = null
-                iconView.setImageResource(R.drawable.volga)
-                subView.text = getString(R.string.vyandex_backend)
-            }
-            TransportType.max -> {
-                iconView.setImageResource(R.drawable.max_msg)
-                iconView.imageTintList = ContextCompat.getColorStateList(requireContext(), R.color.text_primary)
-                subView.text = getString(R.string.max_messenger_backend)
-            }
-            TransportType.cups -> {
-                iconView.imageTintList = null
-                iconView.setImageResource(R.drawable.ic_cups)
-                subView.text = getString(R.string.cups_backend)
-            }
-            TransportType.mailru -> {
-                iconView.imageTintList = null
-                iconView.setImageResource(R.drawable.ic_mailru)
-                subView.text = getString(R.string.mailru_backend)
-            }
-        }
 
         view.findViewById<View>(R.id.menu_edit).setOnClickListener {
             it.performAppHaptics(HapticFeedbackConstants.VIRTUAL_KEY)

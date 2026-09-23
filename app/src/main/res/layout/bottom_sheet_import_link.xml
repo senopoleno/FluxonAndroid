@@ -23,20 +23,12 @@
         android:gravity="center_vertical"
         android:layout_marginBottom="8dp">
 
-        <FrameLayout
-            android:layout_width="44dp"
-            android:layout_height="44dp"
-            android:background="@drawable/bg_icon_badge">
-
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:layout_gravity="center"
-                android:src="@drawable/ic_restore"
-                app:tint="@color/m3_primary"
-                android:contentDescription="@null" />
-
-        </FrameLayout>
+        <ImageView
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:src="@drawable/ic_restore"
+            app:tint="@color/m3_primary"
+            android:contentDescription="@null" />
 
         <TextView
             android:layout_width="0dp"

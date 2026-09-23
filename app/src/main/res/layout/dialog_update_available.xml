@@ -9,18 +9,12 @@
     android:background="@drawable/bg_menu_popup"
     android:padding="22dp">
 
-    <FrameLayout
-        android:layout_width="56dp"
-        android:layout_height="56dp"
-        android:background="@drawable/bg_update_badge">
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:layout_gravity="center"
-            android:src="@drawable/ic_update"
-            app:tint="@color/m3_primary"
-            android:contentDescription="@null" />
-    </FrameLayout>
+    <ImageView
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:src="@drawable/ic_update"
+        app:tint="@color/m3_primary"
+        android:contentDescription="@null" />
 
     <TextView
         android:id="@+id/update_title"

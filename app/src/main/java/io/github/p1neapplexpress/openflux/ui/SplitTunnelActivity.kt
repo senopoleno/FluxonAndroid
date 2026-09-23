@@ -312,6 +312,7 @@ class SplitTunnelActivity : AppCompatActivity() {
         sitesRecycler = findViewById(R.id.sites_recycler)
 
         appsRecycler.layoutManager = LinearLayoutManager(this)
+        appsRecycler.isNestedScrollingEnabled = false
 
         appsAdapter = AppsAdapter { app, isSelected ->
 
@@ -322,6 +323,7 @@ class SplitTunnelActivity : AppCompatActivity() {
         appsRecycler.adapter = appsAdapter
 
         sitesRecycler.layoutManager = LinearLayoutManager(this)
+        sitesRecycler.isNestedScrollingEnabled = false
 
         domainsAdapter = DomainsAdapter { domain ->
 
@@ -511,6 +513,13 @@ class SplitTunnelActivity : AppCompatActivity() {
 
             val myPackage = packageName
 
+            val allInstalledPkgs = installed.map { it.packageName }.toSet()
+            if (!appPrefs.isInitialized()) {
+                appPrefs.initializeDefaults(allInstalledPkgs)
+            } else {
+                appPrefs.ensureRuDefaultsMigrated(allInstalledPkgs)
+            }
+
             val currentSelected = getSelectedAppPackages()
 
             val list = mutableListOf<AppItem>()
@@ -679,11 +688,10 @@ class SplitTunnelActivity : AppCompatActivity() {
 
     private fun resetAppDefaults() {
 
-        val defaultRu = RussianAppsPreset.PACKAGE_NAMES
-
         if (appPrefs.mode == SplitTunnelPreferences.MODE_BYPASS) {
 
-            appPrefs.bypassApps = defaultRu
+            val allPkgs = allApps.map { it.packageName }.toSet()
+            appPrefs.resetToDefaults(allPkgs)
 
         } else {
 

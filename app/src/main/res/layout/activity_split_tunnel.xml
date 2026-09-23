@@ -100,13 +100,18 @@
 
     </LinearLayout>
 
-    <!-- Content Container (Eliminated NestedScrollView wrapping RecyclerView) -->
-    <LinearLayout
+    <!-- Content Container (NestedScrollView for whole-page scrolling) -->
+    <androidx.core.widget.NestedScrollView
         android:id="@+id/scroll_container"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:orientation="vertical">
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
 
         <!-- Section Switcher: Apps vs Sites -->
         <LinearLayout
@@ -163,8 +168,7 @@
         <LinearLayout
             android:id="@+id/container_apps_section"
             android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
+            android:layout_height="wrap_content"
             android:orientation="vertical">
 
                 <!-- Mode Toggle (Bypass vs Proxy) -->
@@ -330,13 +334,13 @@
                 <!-- Apps List & States -->
                 <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_weight="1">
+                    android:layout_height="wrap_content">
 
                     <androidx.recyclerview.widget.RecyclerView
                         android:id="@+id/apps_recycler"
                         android:layout_width="match_parent"
-                        android:layout_height="match_parent"
+                        android:layout_height="wrap_content"
+                        android:nestedScrollingEnabled="false"
                         android:clipToPadding="false"
                         android:paddingTop="4dp"
                         android:paddingBottom="24dp" />
@@ -386,8 +390,7 @@
             <LinearLayout
                 android:id="@+id/container_sites_section"
                 android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
+                android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -571,13 +574,13 @@
                 <!-- Sites Recycler & Empty State -->
                 <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_weight="1">
+                    android:layout_height="wrap_content">
 
                     <androidx.recyclerview.widget.RecyclerView
                         android:id="@+id/sites_recycler"
                         android:layout_width="match_parent"
-                        android:layout_height="match_parent"
+                        android:layout_height="wrap_content"
+                        android:nestedScrollingEnabled="false"
                         android:clipToPadding="false"
                         android:paddingTop="4dp"
                         android:paddingBottom="24dp" />
@@ -616,6 +619,8 @@
 
             </LinearLayout>
 
-    </LinearLayout>
+        </LinearLayout>
+
+    </androidx.core.widget.NestedScrollView>
 
 </LinearLayout>

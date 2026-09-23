@@ -1,4 +1,4 @@
-﻿package io.github.p1neapplexpress.openflux.util
+package io.github.p1neapplexpress.openflux.util
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -13,6 +13,8 @@ class SplitTunnelPreferences(context: Context) {
         private const val KEY_PROXY_APPS = "proxy_apps"
         private const val KEY_HIDE_SYSTEM_APPS = "hide_system_apps"
         private const val KEY_INITIALIZED = "presets_initialized"
+
+        private const val KEY_RU_PREFIX_V2 = "ru_prefix_defaults_applied_v2"
 
         const val MODE_BYPASS = "bypass"
         const val MODE_PROXY = "proxy"
@@ -43,16 +45,35 @@ class SplitTunnelPreferences(context: Context) {
 
     fun isInitialized(): Boolean = prefs.getBoolean(KEY_INITIALIZED, false)
 
-    fun initializeDefaults(installedPackages: Set<String>) {
-        val defaultBypass = RussianAppsPreset.PACKAGE_NAMES.filter { it in installedPackages }.toSet()
+    fun computeDefaultBypassApps(installedPackages: Collection<String>): Set<String> {
+        return installedPackages.filter { pkg ->
+            val lower = pkg.lowercase()
+            pkg in RussianAppsPreset.PACKAGE_NAMES || lower.startsWith("ru.") || lower.startsWith("ru")
+        }.toSet()
+    }
+
+    fun initializeDefaults(installedPackages: Collection<String>) {
+        val defaultBypass = computeDefaultBypassApps(installedPackages)
         prefs.edit()
             .putBoolean(KEY_INITIALIZED, true)
+            .putBoolean(KEY_RU_PREFIX_V2, true)
             .putStringSet(KEY_BYPASS_APPS, defaultBypass)
             .apply()
     }
 
-    fun resetToDefaults(installedPackages: Set<String>) {
-        val defaultBypass = RussianAppsPreset.PACKAGE_NAMES.filter { it in installedPackages }.toSet()
-        bypassApps = defaultBypass
+    fun resetToDefaults(installedPackages: Collection<String>) {
+        bypassApps = computeDefaultBypassApps(installedPackages)
+    }
+
+    fun ensureRuDefaultsMigrated(installedPackages: Collection<String>) {
+        if (!prefs.getBoolean(KEY_RU_PREFIX_V2, false)) {
+            val ruApps = computeDefaultBypassApps(installedPackages)
+            val current = prefs.getStringSet(KEY_BYPASS_APPS, null)?.toSet() ?: RussianAppsPreset.PACKAGE_NAMES
+            val merged = current + ruApps
+            prefs.edit()
+                .putBoolean(KEY_RU_PREFIX_V2, true)
+                .putStringSet(KEY_BYPASS_APPS, merged)
+                .apply()
+        }
     }
 }

@@ -85,6 +85,12 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
     private val _uptimeSeconds = MutableStateFlow(0L)
     val uptimeSeconds: StateFlow<Long> = _uptimeSeconds.asStateFlow()
 
+    data class SpeedSample(val rxSpeed: Long, val txSpeed: Long, val seq: Long = 0L)
+
+    private var speedSeq = 0L
+    private val _speedSample = MutableStateFlow(SpeedSample(0L, 0L, 0L))
+    val speedSample: StateFlow<SpeedSample> = _speedSample.asStateFlow()
+
     private val _rxSpeed = MutableStateFlow(0L)
     val rxSpeed: StateFlow<Long> = _rxSpeed.asStateFlow()
 
@@ -161,6 +167,7 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
                     is AppEvent.SpeedUpdate -> {
                         _rxSpeed.value = event.rxSpeed
                         _txSpeed.value = event.txSpeed
+                        _speedSample.value = SpeedSample(event.rxSpeed, event.txSpeed, ++speedSeq)
                     }
                     is AppEvent.VpnConnected -> {
                         val tName = event.tunnelName ?: io.github.p1neapplexpress.openflux.service.SocksVpnService.activeTunnelName
@@ -426,9 +433,12 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
             _active.value = TunnelState.Idle
             _rxSpeed.value = 0L
             _txSpeed.value = 0L
+            _speedSample.value = SpeedSample(0L, 0L, ++speedSeq)
             stopUptimeCounter()
             healthCheckJob?.cancel()
             healthCheckJob = null
+            failoverJob?.cancel()
+            failoverJob = null
             pingCache.clear()
             _tunnelHealth.value = getTunnelHealth(selectedTunnelId ?: -1)
             _healthMap.value = healthCache.toMap()
@@ -632,6 +642,8 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         return -1L
     }
 
+    private var failoverJob: kotlinx.coroutines.Job? = null
+
     private fun triggerFailoverIfNeeded(failedTunnel: Tunnel) {
         val appSettings = io.github.p1neapplexpress.openflux.util.AppSettings(getApplication())
         if (!appSettings.autoFailover) return
@@ -640,15 +652,30 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         if (all.size <= 1) return
         val nextTunnel = all.firstOrNull { it.id != failedTunnel.id } ?: return
 
-        Logx.i(TAG, "Failover triggered: switching from '${failedTunnel.name}' to '${nextTunnel.name}'")
-        EventBus.dispatch(io.github.p1neapplexpress.openflux.event.AppEvent.LogMessage("[I] Failover: переключение на '${nextTunnel.name}'..."))
+        if (failoverJob?.isActive == true) return
 
-        connectionJob?.cancel()
-        connectionJob = viewModelScope.launch(Dispatchers.Main) {
-            stop()
-            kotlinx.coroutines.delay(1000L)
-            selectTunnel(nextTunnel)
-            startTunnel(nextTunnel)
+        failoverJob = viewModelScope.launch(Dispatchers.Main) {
+            Logx.i(TAG, "Failover scheduled: waiting 30s before switching from '${failedTunnel.name}' to '${nextTunnel.name}'")
+            EventBus.dispatch(io.github.p1neapplexpress.openflux.event.AppEvent.LogMessage("[I] Failover: ожидание 30 сек перед переключением с '${failedTunnel.name}'..."))
+
+            kotlinx.coroutines.delay(30_000L)
+
+            val curActive = _active.value
+            val isCurrentDead = !curActive.isActive || _tunnelHealth.value == TunnelHealth.UNAVAILABLE
+            if (isCurrentDead) {
+                Logx.i(TAG, "Failover triggered: switching from '${failedTunnel.name}' to '${nextTunnel.name}'")
+                EventBus.dispatch(io.github.p1neapplexpress.openflux.event.AppEvent.LogMessage("[I] Failover: переключение на '${nextTunnel.name}'..."))
+                connectionJob?.cancel()
+                connectionJob = viewModelScope.launch(Dispatchers.Main) {
+                    stop()
+                    kotlinx.coroutines.delay(1500L)
+                    selectTunnel(nextTunnel)
+                    startTunnel(nextTunnel)
+                }
+            } else {
+                Logx.i(TAG, "Failover cancelled: tunnel '${failedTunnel.name}' recovered")
+                EventBus.dispatch(io.github.p1neapplexpress.openflux.event.AppEvent.LogMessage("[I] Failover отменен: соединение восстановилось"))
+            }
         }
     }
 
@@ -794,22 +821,21 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
             probeRunningTunnel(tunnel)
             var consecutiveFailures = 0
             while (isActive) {
-                delay(300_000L) // 5 minutes
+                val checkDelay = if (consecutiveFailures > 0) 15_000L else 300_000L
+                delay(checkDelay)
                 val currentTunnel = (_active.value as? TunnelState.Running)?.tunnel ?: break
                 val isAlive = probeRunningTunnel(currentTunnel)
                 if (isAlive) {
                     consecutiveFailures = 0
+                    failoverJob?.cancel()
+                    failoverJob = null
                     if (_tunnelHealth.value != TunnelHealth.AVAILABLE) {
                         _tunnelHealth.value = TunnelHealth.AVAILABLE
                         saveHealth(currentTunnel.id, TunnelHealth.AVAILABLE)
                     }
                 } else {
                     consecutiveFailures++
-                    val isDead = if (io.github.p1neapplexpress.openflux.service.FluxonProxyService.isProxyRunning) {
-                        consecutiveFailures >= 2
-                    } else {
-                        service?.isFServiceRunning() != true || service?.isVpnRunning() != true || consecutiveFailures >= 2
-                    }
+                    val isDead = consecutiveFailures >= 3
                     if (isDead) {
                         _tunnelHealth.value = TunnelHealth.UNAVAILABLE
                         saveHealth(currentTunnel.id, TunnelHealth.UNAVAILABLE)
@@ -833,6 +859,8 @@ class TunnelsViewModel(app: Application) : AndroidViewModel(app) {
         stopUptimeCounter()
         healthCheckJob?.cancel()
         healthCheckJob = null
+        failoverJob?.cancel()
+        failoverJob = null
         try { getApplication<Application>().unbindService(connection) } catch (_: Exception) {}
     }
 }

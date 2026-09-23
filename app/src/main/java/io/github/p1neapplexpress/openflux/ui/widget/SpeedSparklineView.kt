@@ -24,18 +24,30 @@ class SpeedSparklineView @JvmOverloads constructor(
     private val rxPath = Path()
     private val txPath = Path()
 
+    private val density = resources.displayMetrics.density
+
     private val rxPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = 2.5f * resources.displayMetrics.density
+        strokeWidth = 2.5f * density
         strokeCap = Paint.Cap.ROUND
         color = 0xFF2563EB.toInt() // M3 Primary Blue (Download)
     }
 
     private val txPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = 2.5f * resources.displayMetrics.density
+        strokeWidth = 2.5f * density
         strokeCap = Paint.Cap.ROUND
         color = 0xFF16A34A.toInt() // Success Green (Upload)
+    }
+
+    private val rxHeadPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = 0xFF2563EB.toInt()
+    }
+
+    private val txHeadPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = 0xFF16A34A.toInt()
     }
 
     fun addSample(rxBytesSec: Long, txBytesSec: Long) {
@@ -55,8 +67,8 @@ class SpeedSparklineView @JvmOverloads constructor(
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val desiredHeight = (32 * resources.displayMetrics.density).toInt()
-        val desiredWidth = (200 * resources.displayMetrics.density).toInt()
+        val desiredHeight = (32 * density).toInt()
+        val desiredWidth = (200 * density).toInt()
         val width = resolveSize(desiredWidth, widthMeasureSpec)
         val height = resolveSize(desiredHeight, heightMeasureSpec)
         setMeasuredDimension(width, height)
@@ -79,6 +91,19 @@ class SpeedSparklineView @JvmOverloads constructor(
 
         canvas.drawPath(rxPath, rxPaint)
         canvas.drawPath(txPath, txPaint)
+
+        val pad = rxPaint.strokeWidth
+        val availW = (w - 2f * pad).coerceAtLeast(1f)
+        val availH = (h - 2f * pad).coerceAtLeast(1f)
+        val stepX = availW / (maxSamples - 1)
+
+        val latestIdx = (writeIndex + maxSamples - 1) % maxSamples
+        val headX = pad + (maxSamples - 1) * stepX
+        val headYRx = (h - pad) - (rxHistory[latestIdx].toFloat() / maxVal.toFloat() * (availH * 0.90f))
+        val headYTx = (h - pad) - (txHistory[latestIdx].toFloat() / maxVal.toFloat() * (availH * 0.90f))
+
+        canvas.drawCircle(headX, headYRx, 2.8f * density, rxHeadPaint)
+        canvas.drawCircle(headX, headYTx, 2.2f * density, txHeadPaint)
     }
 
     private fun buildPath(path: Path, history: LongArray, maxVal: Long, w: Float, h: Float) {

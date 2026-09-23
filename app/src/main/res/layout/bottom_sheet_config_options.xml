@@ -18,65 +18,7 @@
         android:background="@drawable/bg_drag_handle"
         android:layout_marginBottom="16dp" />
 
-    <!-- Config Header Preview -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginBottom="14dp">
 
-        <FrameLayout
-            android:layout_width="44dp"
-            android:layout_height="44dp"
-            android:background="@drawable/bg_icon_badge">
-
-            <ImageView
-                android:id="@+id/sheet_config_icon"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:layout_gravity="center"
-                android:src="@drawable/yandex_docs"
-                android:contentDescription="@null" />
-
-        </FrameLayout>
-
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="14dp"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/sheet_config_name"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textColor="@color/text_primary"
-                android:textSize="17sp"
-                android:fontFamily="sans-serif-bold"
-                android:maxLines="1"
-                android:ellipsize="end"
-                tools:text="OpenFlux VPN" />
-
-            <TextView
-                android:id="@+id/sheet_config_subtitle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:textColor="@color/text_secondary"
-                android:textSize="13sp"
-                tools:text="Yandex Docs Backend" />
-
-        </LinearLayout>
-
-    </LinearLayout>
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="@color/m3_outline_variant"
-        android:layout_marginBottom="8dp" />
 
     <!-- Action 1: Edit -->
     <LinearLayout
