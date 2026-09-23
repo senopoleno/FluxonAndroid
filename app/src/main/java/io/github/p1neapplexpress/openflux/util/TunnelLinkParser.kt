@@ -346,14 +346,14 @@ object TunnelLinkParser {
                 val transType = when {
                     isCups -> io.github.p1neapplexpress.openflux.data.TransportType.cups
                     isMailRu -> io.github.p1neapplexpress.openflux.data.TransportType.mailru
-                    else -> io.github.p1neapplexpress.openflux.data.TransportType.yandex
+                    else -> io.github.p1neapplexpress.openflux.data.TransportType.vyandex
                 }
                 tunnel = Tunnel(
                     id = System.currentTimeMillis() * 1000L + kotlin.random.Random.nextLong(1000L),
                     name = when (transType) {
                         io.github.p1neapplexpress.openflux.data.TransportType.cups -> "CUPS Tunnel"
                         io.github.p1neapplexpress.openflux.data.TransportType.mailru -> "Mail.ru Docs"
-                        else -> "Yandex Docs"
+                        else -> "Yandex Volga"
                     },
                     transportType = transType.name,
                     transportConnPayload = listOf(

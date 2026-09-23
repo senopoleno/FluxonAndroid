@@ -201,17 +201,18 @@ class NativeProcessSupervisor(private val context: Context) {
 
                             // 1. Detect critical transport startup errors (ignore client proxy/routing lines)
                             if (!connected.get() && !l.contains("[ROUTER]") && !l.contains("[SOCKS5]")) {
-                                val isCaptchaOrAuthError = l.contains("showcaptchafast", ignoreCase = true) ||
-                                        l.contains("SmartCaptcha", ignoreCase = true) ||
-                                        l.contains("fetchDocInfo failed", ignoreCase = true) ||
-                                        l.contains("looks like a login page", ignoreCase = true)
-                                if (l.contains("Failed to start transport", ignoreCase = true) ||
-                                    l.contains("panic:", ignoreCase = true) ||
-                                    l.contains("Unknown transport type", ignoreCase = true) ||
-                                    l.contains("flag provided but not defined", ignoreCase = true) ||
-                                    l.contains("close 1005", ignoreCase = true) ||
-                                    isCaptchaOrAuthError
-                                ) {
+                                val isCaptcha = l.contains("showcaptchafast", ignoreCase = true) || l.contains("SmartCaptcha", ignoreCase = true)
+                                val isFormatError = l.contains("balancer_url missing", ignoreCase = true) || l.contains("Volga format", ignoreCase = true)
+                                val isLoginError = l.contains("looks like a login page", ignoreCase = true)
+                                val isDocFetchError = l.contains("fetchDocInfo failed", ignoreCase = true)
+                                val isCriticalStartupError = l.contains("Failed to start transport", ignoreCase = true) ||
+                                        l.contains("panic:", ignoreCase = true) ||
+                                        l.contains("Unknown transport type", ignoreCase = true) ||
+                                        l.contains("flag provided but not defined", ignoreCase = true) ||
+                                        l.contains("close 1005", ignoreCase = true) ||
+                                        isCaptcha || isFormatError || isLoginError || isDocFetchError
+
+                                if (isCriticalStartupError) {
                                     delayedConnectRunnable?.let { handler.removeCallbacks(it) }
                                     delayedConnectRunnable = null
                                     gracePeriodRunnable?.let { handler.removeCallbacks(it) }
@@ -219,10 +220,15 @@ class NativeProcessSupervisor(private val context: Context) {
                                     connected.set(false)
                                     running.set(false)
                                     EventBus.dispatch(AppEvent.TransportDisconnected)
-                                    val errMsg = if (isCaptchaOrAuthError) {
-                                        "[E] Ошибка авторизации: капча/проверка Yandex Docs (showcaptchafast)"
-                                    } else {
-                                        "[E] Transport error: $l"
+                                    val errMsg = when {
+                                        isCaptcha ->
+                                            "[E] Капча Яндекса (showcaptchafast). Смените IP (моб. сеть) или создайте новый документ."
+                                        isFormatError ->
+                                            "[E] Документ нового формата Volga. В настройках туннеля выберите 'Yandex.Docs (Volga)'."
+                                        isLoginError ->
+                                            "[E] Документ приватный. В Яндекс.Документах откройте: Поделиться -> Редактирование."
+                                        else ->
+                                            "[E] Ошибка транспорта: $l"
                                     }
                                     EventBus.dispatch(AppEvent.LogMessage(errMsg))
                                     Logx.e(TAG, "Transport error detected: $l")

@@ -23,7 +23,7 @@ import java.nio.charset.StandardCharsets
 data class AddEditFormState(
     val id: Long = System.currentTimeMillis(),
     val name: String = "",
-    val transport: TransportType = TransportType.yandex,
+    val transport: TransportType = TransportType.vyandex,
     val docUrl: String = "",
     val maxToken: String = "",
     val maxUid: String = "",
